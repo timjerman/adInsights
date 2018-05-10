@@ -16,7 +16,7 @@ class FileReader:
 
     def readJSONLineData(self, in_file_name):
 
-        return pd.read_json(in_file_name, lines=True)
+        return pd.read_json(in_file_name, lines=True, convert_dates=False, convert_axes=False)
 
     def writeJSONLineData(self, df: pd.DataFrame, out_file_name):
         """
@@ -25,7 +25,7 @@ class FileReader:
         """
         df.to_json(out_file_name, orient='records', lines=True)
 
-    def preprocessData(self, df):
+    def preprocessData(self, df: pd.DataFrame):
 
         # df = df.dropna(subset=['objectClazz'])
         # tmp = df.groupby('name').count()
@@ -33,11 +33,22 @@ class FileReader:
         # df = df.groupby('sessionId').filter(lambda g: any(g['purpose'] == 'live')).filter(lambda g: any(g['name'] == 'adRequested'))
 
         # retain only selected values for column 'name'
-        df = df[df['name'].isin(['adRequested', 'screenShown', 'interaction', 'firstInteraction', 'userError', 'pageRequested'])]
+        df = df.loc[df['name'].isin(['adRequested', 'screenShown', 'interaction', 'firstInteraction', 'userError', 'pageRequested'])]
+
         # select only valid timestamps
         df = df.loc[(df['clientTimestamp'] > 1429092000) & (df['clientTimestamp'] < 1429300800)]
-        # remove sessions where purpose is not live and doesn't contain an adRequested event
-        df = df.groupby('sessionId').filter(lambda g: any(g['purpose'] == 'live') and any(g['name'] == 'adRequested'))
+
+        # remove sessions where purpose is not live and it doesn't contain an adRequested event
+        # filtering is quite slow
+        # df = df.groupby('sessionId').filter(lambda g: any(g['purpose'] == 'live') and any(g['name'] == 'adRequested'))
+        # a faster alternative
+        df['purposeIsLive'] = (df['purpose'] == 'live').astype('uint16')
+        df['nameIsAdRequested'] = (df['name'] == 'adRequested').astype('uint8')
+        df_grouped = df[['sessionId', 'purposeIsLive', 'nameIsAdRequested']].copy().groupby('sessionId').sum().reset_index()
+        df_grouped = df_grouped.loc[(df_grouped['purposeIsLive'] > 0) & (df_grouped['nameIsAdRequested'] > 0)]
+        df = df.loc[df['sessionId'].isin(df_grouped['sessionId'])]
+        df = df.drop(columns=['purposeIsLive', 'nameIsAdRequested'])
+
         return df
 
     def loadData(self, save_preprocessed=True, use_already_preprocessed=True):
@@ -63,6 +74,3 @@ if __name__ == '__main__':
 
 
     print('Finished.')
-
-
-    # print(df.describe())
