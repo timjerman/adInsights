@@ -21,10 +21,29 @@ def plot_add_requested_histogram(df: pd.DataFrame):
     ad_requested_timestamps.groupby(pd.Grouper(key='clientTimestamp', freq='30Min')).count().plot(kind='bar')
     plt.show()
 
+def plot_intercation_time_histogram(df: pd.DataFrame):
+    # first reduce the dataset only to the needed data
+    df_start_interaction_time = df[['sessionId', 'name', 'clientTimestamp']].copy()
+    df_start_interaction_time = df_start_interaction_time.loc[df_start_interaction_time['name'].isin(['screenShown', 'firstInteraction'])]
+    df_start_interaction_time['hasScreenShown'] = (df_start_interaction_time['name'] == 'screenShown').astype('uint8')
+    df_start_interaction_time['hasFirstInteraction'] = (df_start_interaction_time['name'] == 'firstInteraction').astype('uint8')
 
+    # find data that has both sessionId and firstInteraction column
+    df_start_interaction_time_grouped = df_start_interaction_time[['sessionId', 'hasScreenShown', 'hasFirstInteraction']].copy().groupby('sessionId').sum().reset_index()
+    df_start_interaction_time_grouped = df_start_interaction_time_grouped.loc[
+        (df_start_interaction_time_grouped['hasScreenShown'] > 0) & (df_start_interaction_time_grouped['hasFirstInteraction'] > 0)
+    ]
+    df_start_interaction_time = df_start_interaction_time.loc[df_start_interaction_time['sessionId'].isin(df_start_interaction_time_grouped['sessionId'])]
+    df_start_interaction_time = df_start_interaction_time.drop(columns=['hasScreenShown', 'hasFirstInteraction'])
 
+    # find the minimum timestamp for screenShown and firstInteraction events for each session separately
+    df_min_timestamps = df_start_interaction_time.groupby(['sessionId', 'name']).min().unstack('name')
+    df_min_timestamps.columns = ['clientTimestampInteraction', 'clientTimestampScreen']
 
-
+    # compute the difference between the two timestamps
+    timestamp_diff = (df_min_timestamps['clientTimestampInteraction'] - df_min_timestamps['clientTimestampScreen'])
+    timestamp_diff[timestamp_diff>-20].plot.hist(bins=50)
+    plt.show()
 
 file_name = 'bdsEventsSample.json'
 
@@ -38,6 +57,8 @@ plot_add_requested_histogram(df)
 add_engagement_rate = get_add_engagement(df)
 print('Add engagement rate: {:.2f}%'.format(add_engagement_rate)) # 2.14%
 
+# Exercise 3: start interaction time
+plot_intercation_time_histogram(df)
 
 
 print('Finished!')
