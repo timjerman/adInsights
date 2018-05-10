@@ -14,18 +14,18 @@ class FileReader:
         split_path = os.path.splitext(in_file_name)
         self.processed_file_name = split_path[0] + suffix + split_path[1]
 
-    def readJSONLineData(self, in_file_name):
+    def read_json_line_data(self, in_file_name):
 
         return pd.read_json(in_file_name, lines=True, convert_dates=False, convert_axes=False)
 
-    def writeJSONLineData(self, df: pd.DataFrame, out_file_name):
+    def write_json_line_data(self, df: pd.DataFrame, out_file_name):
         """
         :param out_file_name: file name of the file where to save the json
         :param df: data frame to save
         """
         df.to_json(out_file_name, orient='records', lines=True)
 
-    def preprocessData(self, df: pd.DataFrame):
+    def preprocess_data(self, df: pd.DataFrame):
 
         # df = df.dropna(subset=['objectClazz'])
         # tmp = df.groupby('name').count()
@@ -51,16 +51,16 @@ class FileReader:
 
         return df
 
-    def loadData(self, save_preprocessed=True, use_already_preprocessed=True):
+    def load_data(self, save_preprocessed=True, use_already_preprocessed=True):
 
         if use_already_preprocessed and os.path.exists(self.processed_file_name):
-            return self.readJSONLineData(self.processed_file_name)
+            return self.read_json_line_data(self.processed_file_name)
 
-        df = self.readJSONLineData(self.in_file_name)
-        df = self.preprocessData(df)
+        df = self.read_json_line_data(self.in_file_name)
+        df = self.preprocess_data(df)
 
         if save_preprocessed:
-            self.writeJSONLineData(df, self.processed_file_name)
+            self.write_json_line_data(df, self.processed_file_name)
 
         return df
 
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     file_name = 'bdsEventsSample.json'
 
     file_reader = FileReader(file_name)
-    df = file_reader.loadData(use_already_preprocessed=True, save_preprocessed=True)
+    df = file_reader.load_data(use_already_preprocessed=True, save_preprocessed=True)
 
 
     print('Finished.')

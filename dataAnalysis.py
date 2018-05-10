@@ -7,7 +7,7 @@ import dataLoader
 file_name = 'bdsEventsSample.json'
 
 file_reader = dataLoader.FileReader(file_name)
-df = file_reader.loadData(use_already_preprocessed=True, save_preprocessed=True)
+df = file_reader.load_data(use_already_preprocessed=True, save_preprocessed=True)
 
 ad_request_timestamps = df.loc[df['name'] == 'adRequested'][['clientTimestamp', 'timestamp']]
 timestamp_diff = (ad_request_timestamps['clientTimestamp'] - ad_request_timestamps['timestamp'])

@@ -29,7 +29,7 @@ def plot_add_requested_histogram(df: pd.DataFrame):
 file_name = 'bdsEventsSample.json'
 
 file_reader = dataLoader.FileReader(file_name)
-df = file_reader.loadData(use_already_preprocessed=True, save_preprocessed=True)
+df = file_reader.load_data(use_already_preprocessed=True, save_preprocessed=True)
 
 # Exercise 1: plot histogram of ad request timestamps
 plot_add_requested_histogram(df)
