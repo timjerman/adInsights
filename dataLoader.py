@@ -42,7 +42,7 @@ class FileReader:
         # filtering is quite slow
         # df = df.groupby('sessionId').filter(lambda g: any(g['purpose'] == 'live') and any(g['name'] == 'adRequested'))
         # a faster alternative
-        df['purposeIsLive'] = (df['purpose'] == 'live').astype('uint16')
+        df['purposeIsLive'] = (df['purpose'] == 'live').astype('uint8')
         df['nameIsAdRequested'] = (df['name'] == 'adRequested').astype('uint8')
         df_grouped = df[['sessionId', 'purposeIsLive', 'nameIsAdRequested']].copy().groupby('sessionId').sum().reset_index()
         df_grouped = df_grouped.loc[(df_grouped['purposeIsLive'] > 0) & (df_grouped['nameIsAdRequested'] > 0)]
