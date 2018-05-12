@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 import os
-
+import time
+import datetime
 
 class FileReader:
 
@@ -32,11 +33,19 @@ class FileReader:
         # df = df.loc[df['sdk'].notNull()]# == 'live']
         # df = df.groupby('sessionId').filter(lambda g: any(g['purpose'] == 'live')).filter(lambda g: any(g['name'] == 'adRequested'))
 
+        df['clientTimestamp'] = df['clientTimestamp'].fillna(value=0)
         # retain only selected values for column 'name'
-        df = df.loc[df['name'].isin(['adRequested', 'screenShown', 'interaction', 'firstInteraction', 'userError', 'pageRequested'])]
+        df = df.loc[df['name'].isin(['adRequested', 'screenShown', 'interaction', 'firstInteraction', 'userError', 'pageRequested'])].copy()
 
-        # select only valid timestamps
-        df = df.loc[(df['clientTimestamp'] > 1429092000) & (df['clientTimestamp'] < 1429300800)]
+        # pageRequested doesn't have a client timestamp -> replace it with timestamp
+        df.loc[df['name'] == 'pageRequested', 'clientTimestamp'] = df.loc[df['name'] == 'pageRequested', 'timestamp']
+        # df.loc[:, 'clientTimestamp'] = np.where(df['name'] == 'pageRequested', df['timestamp'], df['clientTimestamp'])
+
+        # select only valid clientTimestamps - retain those that are inside of a 24 hour window to the valid server timestamps
+        df = df.loc[
+            (df['clientTimestamp'] > time.mktime(datetime.datetime(year=2015, month=4, day=15, hour=10).timetuple())) &
+            (df['clientTimestamp'] < time.mktime(datetime.datetime(year=2015, month=4, day=17, hour=20).timetuple()))
+        ]
 
         # remove sessions where purpose is not live and it doesn't contain an adRequested event
         # filtering is quite slow
@@ -44,10 +53,14 @@ class FileReader:
         # a faster alternative
         df['purposeIsLive'] = (df['purpose'] == 'live').astype('uint8')
         df['nameIsAdRequested'] = (df['name'] == 'adRequested').astype('uint8')
-        df_grouped = df[['sessionId', 'purposeIsLive', 'nameIsAdRequested']].copy().groupby('sessionId').sum().reset_index()
-        df_grouped = df_grouped.loc[(df_grouped['purposeIsLive'] > 0) & (df_grouped['nameIsAdRequested'] > 0)]
+        df['nameIsPageRequested'] = (df['name'] == 'pageRequested').astype('uint8')
+        df_grouped = df[['sessionId', 'purposeIsLive', 'nameIsAdRequested', 'nameIsPageRequested']].copy().groupby('sessionId').sum().reset_index()
+        df_grouped = df_grouped.loc[(df_grouped['purposeIsLive'] > 0) & (df_grouped['nameIsAdRequested'] > 0) & (df_grouped['nameIsPageRequested'] > 0)]
         df = df.loc[df['sessionId'].isin(df_grouped['sessionId'])]
-        df = df.drop(columns=['purposeIsLive', 'nameIsAdRequested'])
+        df = df.drop(columns=['purposeIsLive', 'nameIsAdRequested', 'nameIsPageRequested'])
+
+        # sort values by server timestamp
+        df = df.sort_values(by=['timestamp'])
 
         return df
 
