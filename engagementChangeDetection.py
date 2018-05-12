@@ -29,7 +29,7 @@ class AdSession:
         return self
 
 
-class AdSessionFixedSizeOrderedDict(OrderedDict):
+class AdSessionWindow(OrderedDict):
     max_elements = 1
     engagement_rate = 0
     number_of_interactions = 0
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     file_name = file_reader.processed_file_name
 
     engagement_rate = []
-    streamed_data_window = AdSessionFixedSizeOrderedDict(max_elements=10000)
+    streamed_data_window = AdSessionWindow(max_elements=10000)
 
     with open(file_name) as stream:
         for stream_line in stream:
