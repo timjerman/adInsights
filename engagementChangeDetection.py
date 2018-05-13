@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import json
 import numpy as np
+import pandas as pd
 
 import dataLoader
 
@@ -26,10 +27,10 @@ class AdSession:
             AdSession.LIVE: False
         }
 
-    def update(self, skip_if_exists=True, **kwargs):
+    def update(self, **kwargs):
         if kwargs is not None:
             for key, value in kwargs.items():
-                if not bool(self.data[key]) or not skip_if_exists:
+                if not bool(self.data[key]) and value is not None:
                     self.data[key] = value
 
         return self
@@ -39,54 +40,96 @@ class AdSession:
         return new_copy
 
 
-
 class AdSessionWindow(OrderedDict):
     max_elements = 1
     engagement_rate = 0
+    error_rate = 0
+    engagement_by_sdk = {}
+    engagement_by_sdk_relative = {}
+    engagement_by_object = {}
     number_of_interactions = 0
     error_count = 0
     number_of_interactions_by_object = {}
     number_of_interactions_by_sdk = {}
+    count_by_sdk = {}
+    requested_and_live_count = 0
 
     def __init__(self, max_elements=1, *args, **kwargs):
         self.max_elements = max_elements
         super().__init__(*args, **kwargs)
 
-    def update_engagement_rate(self):
-        self.engagement_rate = self.number_of_interactions / len(self)
+    @staticmethod
+    def divide(x, y):
+        if y == 0:
+            return 0
+        return x/y
 
-    def update_interaction_value(self, key, interaction_dict, add=True):
+    def update_engagement_rate(self):
+
+        self.error_rate = 100 * self.error_count / len(self)
+        if self.requested_and_live_count > 0:
+            self.engagement_rate = 100 * self.number_of_interactions / self.requested_and_live_count
+            self.engagement_by_sdk_relative = {k: 100 * v / self.requested_and_live_count for k, v in self.number_of_interactions_by_sdk.items()}
+            self.engagement_by_object = {k: 100 * v / self.requested_and_live_count for k, v in self.number_of_interactions_by_object.items()}
+
+        self.engagement_by_sdk = {k: 100 * AdSessionWindow.divide(v, self.count_by_sdk[k]) for k, v in self.number_of_interactions_by_sdk.items()}
+
+    @staticmethod
+    def update_interaction_value(key, interaction_dict, add=True):
         if key not in interaction_dict:
             interaction_dict[key] = 0
         if add:
             interaction_dict[key] += 1
         else:
             interaction_dict[key] -= 1
+        return interaction_dict
 
     def update_session_elements(self, session_id, **kwargs):
 
         session_before_update = self[session_id].copy()
-        self[session_id] = self[session_id].update(skip_if_exists=True, **kwargs)
+        self[session_id] = self[session_id].update(**kwargs)
         update_needed = False
+
+        if self[session_id].data[AdSession.REQUESTED] and not session_before_update.data[AdSession.REQUESTED] and self[session_id].data[AdSession.LIVE]:
+            self.requested_and_live_count += 1
 
         if self[session_id].data[AdSession.INTERACTED]:
             if session_before_update.data[AdSession.INTERACTED] != self[session_id].data[AdSession.INTERACTED]:
                 self.number_of_interactions += 1
 
                 if self[session_id].data[AdSession.SDK] != '':
-                    self.update_interaction_value(self[session_id].data[AdSession.SDK], self.number_of_interactions_by_sdk)
+                    self.number_of_interactions_by_sdk = AdSessionWindow.update_interaction_value(
+                        self[session_id].data[AdSession.SDK],
+                        self.number_of_interactions_by_sdk
+                    )
                 if self[session_id].data[AdSession.OBJECT] != '':
-                    self.update_interaction_value(self[session_id].data[AdSession.OBJECT], self.number_of_interactions_by_object)
+                    self.number_of_interactions_by_object = AdSessionWindow.update_interaction_value(
+                        self[session_id].data[AdSession.OBJECT],
+                        self.number_of_interactions_by_object
+                    )
 
                 update_needed = True
             else:
                 if session_before_update.data[AdSession.SDK] == '' and self[session_id].data[AdSession.SDK] != '':
-                    self.update_interaction_value(self[session_id].data[AdSession.SDK], self.number_of_interactions_by_sdk)
+                    self.number_of_interactions_by_sdk = AdSessionWindow.update_interaction_value(
+                        self[session_id].data[AdSession.SDK],
+                        self.number_of_interactions_by_sdk
+                    )
                     update_needed = True
 
                 if session_before_update.data[AdSession.OBJECT] == '' and self[session_id].data[AdSession.OBJECT] != '':
-                    self.update_interaction_value(self[session_id].data[AdSession.OBJECT], self.number_of_interactions_by_object)
+                    self.number_of_interactions_by_object = AdSessionWindow.update_interaction_value(
+                        self[session_id].data[AdSession.OBJECT],
+                        self.number_of_interactions_by_object
+                    )
                     update_needed = True
+
+        if session_before_update.data[AdSession.SDK] == '' and self[session_id].data[AdSession.SDK] != '':
+            self.count_by_sdk = AdSessionWindow.update_interaction_value(
+                self[session_id].data[AdSession.SDK],
+                self.count_by_sdk
+            )
+            update_needed = True
 
         if not session_before_update.data[AdSession.ERROR] and self[session_id].data[AdSession.ERROR]:
             self.error_count += 1
@@ -94,30 +137,39 @@ class AdSessionWindow(OrderedDict):
         if update_needed:
             self.update_engagement_rate()
 
-
-        # self[session_id] = self[session_id].update(kwargs)
-
-
-
     def __setitem__(self, key, value: AdSession):
 
         OrderedDict.__setitem__(self, key, value)
         if self.max_elements > 0:
             if len(self) > self.max_elements:
                 key_pop, value_pop = self.popitem(False)
+
+                if value_pop.data[AdSession.REQUESTED] and value_pop.data[AdSession.LIVE]:
+                    self.requested_and_live_count -= 1
+                if value_pop.data[AdSession.SDK] != '':
+                    self.count_by_sdk = AdSessionWindow.update_interaction_value(
+                        value_pop.data[AdSession.SDK],
+                        self.count_by_sdk,
+                        add=False
+                    )
                 if value_pop.data[AdSession.INTERACTED]:
                     self.number_of_interactions -= 1
                     if value_pop.data[AdSession.SDK] != '':
-                        self.update_interaction_value(value_pop.data[AdSession.SDK],
-                                                      self.number_of_interactions_by_sdk, add=False)
+                        self.number_of_interactions_by_sdk = AdSessionWindow.update_interaction_value(
+                            value_pop.data[AdSession.SDK],
+                            self.number_of_interactions_by_sdk,
+                            add=False
+                        )
                     if value_pop.data[AdSession.OBJECT] != '':
-                        self.update_interaction_value(value_pop.data[AdSession.OBJECT],
-                                                      self.number_of_interactions_by_object, add=False)
+                        self.number_of_interactions_by_object = AdSessionWindow.update_interaction_value(
+                            value_pop.data[AdSession.OBJECT],
+                            self.number_of_interactions_by_object,
+                            add=False
+                        )
                 if value_pop.data[AdSession.ERROR]:
                     self.error_count -= 1
 
                 self.update_engagement_rate()
-
 
 
 if __name__ == '__main__':
@@ -130,7 +182,12 @@ if __name__ == '__main__':
     file_name = file_reader.processed_file_name
 
     engagement_rate = []
+    error_rate = []
+    engagement_rate_sdk = {}
+    engagement_rate_object = {}
+    engagement_rate_sdk_relative = {}
     streamed_data_window = AdSessionWindow(max_elements=10000)
+    line_count = 0
 
     with open(file_name) as stream:
         for stream_line in stream:
@@ -170,8 +227,17 @@ if __name__ == '__main__':
 
             # print(streamed_data_window.engagement_rate)
             engagement_rate.append(streamed_data_window.engagement_rate)
+            error_rate.append(streamed_data_window.error_rate)
+            engagement_rate_sdk[line_count] = streamed_data_window.engagement_by_sdk
+            engagement_rate_sdk_relative[line_count] = streamed_data_window.engagement_by_sdk_relative
+            engagement_rate_object[line_count] = streamed_data_window.engagement_by_object
+            line_count += 1
 
     np.array(engagement_rate).dump('adEngagementRate.npy')
+    np.array(error_rate).dump('errorRate.npy')
+    pd.DataFrame.from_dict(engagement_rate_object).transpose().to_pickle('objectEngagementRate.npy')
+    pd.DataFrame.from_dict(engagement_rate_sdk).transpose().to_pickle('sdkEngagementRate.npy')
+    pd.DataFrame.from_dict(engagement_rate_sdk_relative).transpose().to_pickle('sdkRelativeEngagementRate.npy')
 
     # # plots
     # import numpy as np
