@@ -49,34 +49,36 @@ class CusumChangeDetector:
         self.running_window.append(x)
         mean_val, std_val = self.compute_stream_mean_and_variance(x, removed_value)  #np.mean(self.running_window)
 
-        threshold = self.threshold_factor * std_val
+        # start detection only after a good portion of the window is filled so as to get some good statistic
+        if len(self.running_window) > 0.5 * self.window_size:
+            threshold = self.threshold_factor * std_val
 
-        if self.mode == 'mean':
-            diff = mean_val - self.previous[1]
-        else:
-            diff = x - self.previous[0]
+            if self.mode == 'mean':
+                diff = mean_val - self.previous[1]
+            else:
+                diff = x - self.previous[0]
 
-        self.control_upper = self.control_upper + diff
-        self.control_lower = self.control_lower - diff
+            self.control_upper = self.control_upper + diff
+            self.control_lower = self.control_lower - diff
 
-        if self.control_upper < 0:  # or x[i] < mean_val:
-            self.control_upper = 0
-            self.control_upper_start = index
-        if self.control_lower < 0:  # or x[i] > mean_val:
-            self.control_lower = 0
-            self.control_lower_start = index
+            if self.control_upper < 0:  # or x[i] < mean_val:
+                self.control_upper = 0
+                self.control_upper_start = index
+            if self.control_lower < 0:  # or x[i] > mean_val:
+                self.control_lower = 0
+                self.control_lower_start = index
 
-        if self.control_upper > threshold or self.control_lower > threshold:
-            # change detected
-            self.threshold_surpassed_count += 1
-            # for consistency the change should last at least a few steps
-            if self.threshold_surpassed_count > self.min_threshold_steps:
-                alarm_index = index  # alarm index
-                start_index = self.control_upper_start if self.control_upper > threshold else self.control_lower_start
-                self.control_upper, self.control_lower = 0, 0  # reset alarm
-                self.control_upper_start, self.control_lower_start = index, index
-        else:
-            self.threshold_surpassed_count = 0
+            if self.control_upper > threshold or self.control_lower > threshold:
+                # change detected
+                self.threshold_surpassed_count += 1
+                # for consistency the change should last at least a few steps
+                if self.threshold_surpassed_count > self.min_threshold_steps:
+                    alarm_index = index  # alarm index
+                    start_index = self.control_upper_start if self.control_upper > threshold else self.control_lower_start
+                    self.control_upper, self.control_lower = 0, 0  # reset alarm
+                    self.control_upper_start, self.control_lower_start = index, index
+            else:
+                self.threshold_surpassed_count = 0
 
         self.previous = [x, mean_val, std_val]
         if len(self.running_window) == self.window_size:
@@ -112,15 +114,15 @@ def plot_detections(data, threshold, threshold_steps, window_size, alarm_index, 
 
     t = range(data.size)
     ax.plot(t, data, 'b-', lw=2)
-    ax.plot(t, xmean, 'r-', lw=2)
+    ax.plot(t, xmean, 'r-', lw=2, alpha=0.7)
     ax.fill_between(t, xmean-xstd, xmean+xstd, color='green', alpha=0.3, interpolate=True)
     if len(alarm_index):
         ax.plot(start_index, xmean[start_index], '>', mfc='g', mec='g', ms=10, label='Start')
-        ax.plot(alarm_index, data[alarm_index], 'o', mfc='r', mec='r', mew=1, ms=5, label='Alarm')
+        ax.plot(alarm_index, xmean[alarm_index], 'o', mfc='r', mec='y', mew=1, ms=10, label='Alarm')
         ax.legend(loc='best', framealpha=.5, numpoints=1)
     ax.set_xlim(-.01 * data.size, data.size * 1.01 - 1)
     ax.set_xlabel('Data points', fontsize=14)
-    ax.set_ylabel('Amplitude', fontsize=14)
+    ax.set_ylabel('Ad engagement rate', fontsize=14)
     ymin, ymax = data[np.isfinite(data)].min(), data[np.isfinite(data)].max()
     yrange = ymax - ymin if ymax > ymin else 1
     ax.set_ylim(ymin - 0.1*yrange, ymax + 0.1*yrange)
@@ -129,6 +131,7 @@ def plot_detections(data, threshold, threshold_steps, window_size, alarm_index, 
                   % (threshold, threshold_steps, window_size, len(start_index)))
     plt.tight_layout()
     plt.show()
+
 
 if __name__ == '__main__':
 
