@@ -41,7 +41,7 @@ class AdSession:
 
 
 class AdSessionWindow(OrderedDict):
-    max_elements = 1
+    window_size = 1
     engagement_rate = 0
     error_rate = 0
     engagement_by_sdk = {}
@@ -54,8 +54,8 @@ class AdSessionWindow(OrderedDict):
     count_by_sdk = {}
     requested_and_live_count = 0
 
-    def __init__(self, max_elements=1, *args, **kwargs):
-        self.max_elements = max_elements
+    def __init__(self, window_size=1, *args, **kwargs):
+        self.window_size = window_size
         super().__init__(*args, **kwargs)
 
     @staticmethod
@@ -140,8 +140,8 @@ class AdSessionWindow(OrderedDict):
     def __setitem__(self, key, value: AdSession):
 
         OrderedDict.__setitem__(self, key, value)
-        if self.max_elements > 0:
-            if len(self) > self.max_elements:
+        if self.window_size > 0:
+            if len(self) > self.window_size:
                 key_pop, value_pop = self.popitem(False)
 
                 if value_pop.data[AdSession.REQUESTED] and value_pop.data[AdSession.LIVE]:
@@ -172,6 +172,55 @@ class AdSessionWindow(OrderedDict):
                 self.update_engagement_rate()
 
 
+class StreamAdEngagement:
+
+    def __init__(self, window_size):
+        self.streamed_data_window = AdSessionWindow(window_size=window_size)
+
+    def analyze_line(self, stream_line_json):
+
+        stream_line = json.loads(stream_line_json)
+        session_id = stream_line['sessionId']
+
+        if stream_line['name'] not in ['adRequested', 'interaction', 'firstInteraction', 'pageRequested', 'userError']:
+            return None
+
+        if session_id not in self.streamed_data_window:
+            self.streamed_data_window[session_id] = AdSession()
+
+        if stream_line['name'] == 'adRequested':
+            self.streamed_data_window.update_session_elements(
+                session_id,
+                requested=True,
+                timestamp=stream_line['timestamp'],
+                live=stream_line['purpose'] == 'live'
+            )
+        elif stream_line['name'] == 'interaction' or stream_line['name'] == 'firstInteraction':
+            self.streamed_data_window.update_session_elements(
+                session_id,
+                interacted=True,
+                objectClazz=stream_line['objectClazz']
+            )
+        elif stream_line['name'] == 'pageRequested':
+            self.streamed_data_window.update_session_elements(
+                session_id,
+                sdk=stream_line['sdk']
+            )
+        elif stream_line['name'] == 'userError':
+            self.streamed_data_window.update_session_elements(
+                session_id,
+                userError=True
+            )
+
+        return (
+            self.streamed_data_window.engagement_rate,
+            self.streamed_data_window.error_rate,
+            self.streamed_data_window.engagement_by_sdk,
+            self.streamed_data_window.engagement_by_sdk_relative,
+            self.streamed_data_window.engagement_by_object
+        )
+
+
 if __name__ == '__main__':
 
     # load the data that will act as a stream and sort it by timestamp
@@ -186,51 +235,22 @@ if __name__ == '__main__':
     engagement_rate_sdk = {}
     engagement_rate_object = {}
     engagement_rate_sdk_relative = {}
-    streamed_data_window = AdSessionWindow(max_elements=10000)
     line_count = 0
 
+    stream_ad_engagement = StreamAdEngagement(window_size=10000)
+
     with open(file_name) as stream:
-        for stream_line in stream:
+        for stream_line_json in stream:
 
-            stream_line = json.loads(stream_line)
-            session_id = stream_line['sessionId']
+            stream_engagement_return = stream_ad_engagement.analyze_line(stream_line_json)
 
-            if stream_line['name'] not in ['adRequested', 'interaction', 'firstInteraction', 'pageRequested', 'userError']:
-                continue
+            if stream_engagement_return is not None:
+                engagement_rate.append(stream_engagement_return[0])
+                error_rate.append(stream_engagement_return[1])
+                engagement_rate_sdk[line_count] = stream_engagement_return[2]
+                engagement_rate_sdk_relative[line_count] = stream_engagement_return[3]
+                engagement_rate_object[line_count] = stream_engagement_return[4]
 
-            if session_id not in streamed_data_window:
-                streamed_data_window[session_id] = AdSession()
-
-            if stream_line['name'] == 'adRequested':
-                streamed_data_window.update_session_elements(
-                    session_id,
-                    requested=True,
-                    timestamp=stream_line['timestamp'],
-                    live=stream_line['purpose'] == 'live'
-                )
-            elif stream_line['name'] == 'interaction' or stream_line['name'] == 'firstInteraction':
-                streamed_data_window.update_session_elements(
-                    session_id,
-                    interacted=True,
-                    objectClazz=stream_line['objectClazz']
-                )
-            elif stream_line['name'] == 'pageRequested':
-                streamed_data_window.update_session_elements(
-                    session_id,
-                    sdk=stream_line['sdk']
-                )
-            elif stream_line['name'] == 'userError':
-                streamed_data_window.update_session_elements(
-                    session_id,
-                    userError=True
-                )
-
-            # print(streamed_data_window.engagement_rate)
-            engagement_rate.append(streamed_data_window.engagement_rate)
-            error_rate.append(streamed_data_window.error_rate)
-            engagement_rate_sdk[line_count] = streamed_data_window.engagement_by_sdk
-            engagement_rate_sdk_relative[line_count] = streamed_data_window.engagement_by_sdk_relative
-            engagement_rate_object[line_count] = streamed_data_window.engagement_by_object
             line_count += 1
 
     np.array(engagement_rate).dump('adEngagementRate.npy')
