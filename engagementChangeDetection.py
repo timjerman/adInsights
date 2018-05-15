@@ -53,6 +53,7 @@ class AdSessionWindow(OrderedDict):
     number_of_interactions_by_sdk = {}
     count_by_sdk = {}
     requested_and_live_count = 0
+    current_timestamp = 0
 
     def __init__(self, window_size=1, *args, **kwargs):
         self.window_size = window_size
@@ -89,6 +90,9 @@ class AdSessionWindow(OrderedDict):
         session_before_update = self[session_id].copy()
         self[session_id] = self[session_id].update(**kwargs)
         update_needed = False
+
+        if 'timestamp' in kwargs:
+            self.current_timestamp = kwargs['timestamp']
 
         if self[session_id].data[AdSession.REQUESTED] and not session_before_update.data[AdSession.REQUESTED] and self[session_id].data[AdSession.LIVE]:
             self.requested_and_live_count += 1
@@ -199,20 +203,24 @@ class StreamAdEngagement:
             self.streamed_data_window.update_session_elements(
                 session_id,
                 interacted=True,
-                objectClazz=stream_line['objectClazz']
+                objectClazz=stream_line['objectClazz'],
+                timestamp=stream_line['timestamp']
             )
         elif stream_line['name'] == 'pageRequested':
             self.streamed_data_window.update_session_elements(
                 session_id,
-                sdk=stream_line['sdk']
+                sdk=stream_line['sdk'],
+                timestamp=stream_line['timestamp']
             )
         elif stream_line['name'] == 'userError':
             self.streamed_data_window.update_session_elements(
                 session_id,
-                userError=True
+                userError=True,
+                timestamp=stream_line['timestamp']
             )
 
         return (
+            self.streamed_data_window.current_timestamp,
             self.streamed_data_window.engagement_rate,
             self.streamed_data_window.error_rate,
             self.streamed_data_window.engagement_by_sdk,
@@ -232,6 +240,7 @@ if __name__ == '__main__':
 
     engagement_rate = []
     error_rate = []
+    data_timestamp = []
     engagement_rate_sdk = {}
     engagement_rate_object = {}
     engagement_rate_sdk_relative = {}
@@ -245,14 +254,16 @@ if __name__ == '__main__':
             stream_engagement_return = stream_ad_engagement.analyze_line(stream_line_json)
 
             if stream_engagement_return is not None:
-                engagement_rate.append(stream_engagement_return[0])
-                error_rate.append(stream_engagement_return[1])
-                engagement_rate_sdk[line_count] = stream_engagement_return[2]
-                engagement_rate_sdk_relative[line_count] = stream_engagement_return[3]
-                engagement_rate_object[line_count] = stream_engagement_return[4]
+                data_timestamp.append(stream_engagement_return[0])
+                engagement_rate.append(stream_engagement_return[1])
+                error_rate.append(stream_engagement_return[2])
+                engagement_rate_sdk[line_count] = stream_engagement_return[3]
+                engagement_rate_sdk_relative[line_count] = stream_engagement_return[4]
+                engagement_rate_object[line_count] = stream_engagement_return[5]
 
-            line_count += 1
+                line_count += 1
 
+    np.array(data_timestamp).dump('dataTimestamps.npy')
     np.array(engagement_rate).dump('adEngagementRate.npy')
     np.array(error_rate).dump('errorRate.npy')
     pd.DataFrame.from_dict(engagement_rate_object).transpose().to_pickle('objectEngagementRate.npy')
