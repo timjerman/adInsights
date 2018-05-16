@@ -14,11 +14,16 @@ def get_overall_add_engagement(df: pd.DataFrame):
 
 
 def plot_add_requested_histogram(df: pd.DataFrame):
-    ad_requested_timestamps = df.loc[df['name'] == 'adRequested'][['clientTimestamp', 'timestamp']]
-    ad_requested_timestamps = df.loc[df['name'] == 'adRequested'][['clientTimestamp', 'timestamp']]
-    ad_requested_timestamps['clientTimestamp'] = pd.to_datetime(ad_requested_timestamps['clientTimestamp'], unit='s')
+    ad_requested_timestamps = df.loc[df['name'] == 'adRequested'][['timestamp', 'sessionId']]
     ad_requested_timestamps['timestamp'] = pd.to_datetime(ad_requested_timestamps['timestamp'], unit='s')
-    ad_requested_timestamps.groupby(pd.Grouper(key='clientTimestamp', freq='30Min')).count().plot(kind='bar')
+    ad_requested_timestamps_grouped = ad_requested_timestamps.groupby(
+        pd.Grouper(key='timestamp', freq='30Min')).count()
+    ad_requested_timestamps_grouped.index = ad_requested_timestamps_grouped.index.strftime('%H:%M')
+    ax = ad_requested_timestamps_grouped.plot(kind='bar', legend=False, color='#8383d3', rot=50, figsize=(8, 5))
+    ax.set_xlabel("Time of day (2015-04-16)")
+    ax.set_ylabel("Count")
+    ax.set_title('Ad requests over time')
+    plt.subplots_adjust(bottom=.15)
     plt.show()
 
 
@@ -43,7 +48,37 @@ def plot_interaction_time_histogram(df: pd.DataFrame):
 
     # compute the difference between the two timestamps
     timestamp_diff = (df_min_timestamps['clientTimestampInteraction'] - df_min_timestamps['clientTimestampScreen'])
-    timestamp_diff[timestamp_diff>-20].plot.hist(bins=50)
+
+    # limit to a reasonable range < 1 hour
+    timestamp_diff = timestamp_diff[timestamp_diff > 0]
+    timestamp_diff = timestamp_diff[timestamp_diff < 3600]
+
+    # timestamp_diff.plot(bins=np.logspace(0, np.log10(3600), 50), kind='hist', loglog=True, xlim=(0, 3600))
+    ax = timestamp_diff.plot(bins=np.linspace(0, 20, 50), kind='hist', log=False, xlim=(0, 20), color='#8383d3',
+                             figsize=(8, 5))
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Count")
+    ax.set_title('Time to interaction')
+    plt.show()
+
+    print('Median time difference: {:.2f} s'.format(np.median(timestamp_diff)))
+    print('Percentage of differences lower than 20 s: {:.1f}%'.format(
+        100 * np.count_nonzero(timestamp_diff < 20) / np.size(timestamp_diff)))
+
+    bins = np.logspace(-1, np.log10(3600), 50)
+    hist, bin_edges = np.histogram(timestamp_diff, bins=bins)
+    hist_cumsum = np.cumsum(hist)
+    hist_cumsum = hist_cumsum / np.max(hist_cumsum)
+
+    _, ax = plt.subplots(figsize=(8, 5))
+    plt.plot(bins, 100 * np.append([0], hist_cumsum), color='#8383d3')
+    plt.xscale('log')
+    ax.set_xlim(0.1, 3600)
+    ax.set_ylim(0, 100)
+    plt.grid(True, which="both", ls="--")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Percentage")
+    ax.set_title('Time to interaction (whole range)')
     plt.show()
 
 
