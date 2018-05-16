@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 import dataLoader
 
@@ -13,15 +14,55 @@ def get_overall_add_engagement(df: pd.DataFrame):
     return add_engagement_rate
 
 
+def get_interval_add_engagement(df: pd.DataFrame, interval='10min'):
+    df_engagement = df[['sessionId', 'name', 'timestamp', 'sdk', 'objectClazz']].copy()
+
+    # propagate sdk to all lines of the same session
+    session_sdk = df_engagement.loc[df_engagement['sdk'].notnull(), ['sessionId', 'sdk']]
+    sdk_dict = dict(zip(session_sdk['sessionId'], session_sdk['sdk']))
+    df_engagement['sdk_mapped'] = df_engagement['sessionId'].map(sdk_dict)
+
+    df_engagement['interacted'] = (df_engagement['name'] == 'interaction') | \
+                                  (df_engagement['name'] == 'firstInteraction')
+    session_interacted = df_engagement[['sessionId', 'interacted', 'timestamp']].groupby('sessionId').agg(
+        {'interacted': 'sum', 'timestamp': 'min'})
+    session_interacted['interacted'] = (session_interacted['interacted'] > 0).astype('int')
+    session_interacted['count'] = 1
+    session_interacted['timestamp'] = pd.to_datetime(session_interacted['timestamp'], unit='s')
+    interval_engagement = session_interacted.groupby([pd.Grouper(key='timestamp', freq=interval)]).sum()
+    interval_engagement['adEngagement'] = 100 * interval_engagement['interacted'] / interval_engagement['count']
+
+    # compute interaction rate using a rolling mean
+    #session_interacted['interacted'].rolling(10000).mean()
+
+    return interval_engagement
+
+
+def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame):
+    add_engagement_interval_rate = add_engagement_interval_rate.copy()
+    add_engagement_interval_rate = add_engagement_interval_rate.rename(
+        columns={'adEngagement': 'Engagement (left)', 'count': 'Count'})
+    ax = add_engagement_interval_rate[['Engagement (left)', 'Count']].plot(secondary_y='Count', legend=True,
+                                                                        color=['#63ea8c', '#8383d3'], linewidth=2.5,
+                                                                        rot=50, figsize=(8, 5))
+    ax.set_xlabel('Time of day (2015-04-16)')
+    ax.set_ylabel('Engagement rate [%]')
+    ax.set_title('Ad engagement over time')
+    ax.xaxis.set_major_locator(mdates.HourLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    plt.gcf().autofmt_xdate()
+    plt.show()
+
+
 def plot_add_requested_histogram(df: pd.DataFrame):
-    ad_requested_timestamps = df.loc[df['name'] == 'adRequested'][['timestamp', 'sessionId']]
+    ad_requested_timestamps = df.loc[df['name'] == 'adRequested'][['timestamp', 'sessionId']].copy()
     ad_requested_timestamps['timestamp'] = pd.to_datetime(ad_requested_timestamps['timestamp'], unit='s')
     ad_requested_timestamps_grouped = ad_requested_timestamps.groupby(
         pd.Grouper(key='timestamp', freq='30Min')).count()
     ad_requested_timestamps_grouped.index = ad_requested_timestamps_grouped.index.strftime('%H:%M')
     ax = ad_requested_timestamps_grouped.plot(kind='bar', legend=False, color='#8383d3', rot=50, figsize=(8, 5))
-    ax.set_xlabel("Time of day (2015-04-16)")
-    ax.set_ylabel("Count")
+    ax.set_xlabel('Time of day (2015-04-16)')
+    ax.set_ylabel('Count')
     ax.set_title('Ad requests over time')
     plt.subplots_adjust(bottom=.15)
     plt.show()
@@ -56,8 +97,8 @@ def plot_interaction_time_histogram(df: pd.DataFrame):
     # timestamp_diff.plot(bins=np.logspace(0, np.log10(3600), 50), kind='hist', loglog=True, xlim=(0, 3600))
     ax = timestamp_diff.plot(bins=np.linspace(0, 20, 50), kind='hist', log=False, xlim=(0, 20), color='#8383d3',
                              figsize=(8, 5))
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("Count")
+    ax.set_xlabel('Time [s]')
+    ax.set_ylabel('Count')
     ax.set_title('Time to interaction')
     plt.show()
 
@@ -75,9 +116,9 @@ def plot_interaction_time_histogram(df: pd.DataFrame):
     plt.xscale('log')
     ax.set_xlim(0.1, 3600)
     ax.set_ylim(0, 100)
-    plt.grid(True, which="both", ls="--")
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel("Percentage")
+    plt.grid(True, which='both', ls='--')
+    ax.set_xlabel('Time [s]')
+    ax.set_ylabel('Percentage')
     ax.set_title('Time to interaction (whole range)')
     plt.show()
 
@@ -97,5 +138,9 @@ print('Add engagement rate: {:.2f}%'.format(add_engagement_rate)) # 2.14%
 # Exercise 3: start interaction time
 plot_interaction_time_histogram(df)
 
+# Exercise 4.1: interval add engagement rate
+add_engagement_rate_10min = get_interval_add_engagement(df, '10Min')
+plot_interval_add_engagement(add_engagement_rate_10min)
+# check significance
 
 print('Finished!')
