@@ -53,7 +53,7 @@ class FileReader:
         df_grouped = df[['sessionId', 'purposeIsLive', 'nameIsAdRequested', 'nameIsPageRequested']].copy().groupby('sessionId').sum().reset_index()
         df_grouped = df_grouped.loc[(df_grouped['purposeIsLive'] > 0) & (df_grouped['nameIsAdRequested'] > 0) & (df_grouped['nameIsPageRequested'] > 0)]
         df = df.loc[df['sessionId'].isin(df_grouped['sessionId'])]
-        df = df.drop(columns=['purposeIsLive', 'nameIsAdRequested', 'nameIsPageRequested'])
+        df = df.drop(['purposeIsLive', 'nameIsAdRequested', 'nameIsPageRequested'], axis=1)
 
         # sort values by server timestamp
         df = df.sort_values(by=['timestamp'])

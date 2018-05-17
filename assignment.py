@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from scipy.stats import ranksums
+import datetime as dt
 
 import dataLoader
 
@@ -41,18 +43,46 @@ def get_interval_add_engagement(df: pd.DataFrame, interval='10min'):
 def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame):
     add_engagement_interval_rate = add_engagement_interval_rate.copy()
     add_engagement_interval_rate = add_engagement_interval_rate.rename(
-        columns={'adEngagement': 'Engagement (left)', 'count': 'Count'})
-    ax = add_engagement_interval_rate[['Engagement (left)', 'Count']].plot(secondary_y='Count', legend=True,
-                                                                        color=['#63ea8c', '#8383d3'], linewidth=2.5,
-                                                                        rot=50, figsize=(8, 5))
+        columns={'adEngagement': 'Engagement', 'count': 'Count'})
+    ax = add_engagement_interval_rate[['Count', 'Engagement']].plot(secondary_y='Engagement', legend=True,
+                                                                    color=['#63ea8c', '#8383d3'], linewidth=2.5,
+                                                                    figsize=(8, 5))
     ax.set_xlabel('Time of day (2015-04-16)')
-    ax.set_ylabel('Engagement rate [%]')
+    ax.set_ylabel('Count')
+    ax.right_ax.set_ylabel('Engagement rate [%]')
     ax.set_title('Ad engagement over time')
     ax.xaxis.set_major_locator(mdates.HourLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    plt.gcf().autofmt_xdate()
     plt.show()
 
+
+def compute_significance_between_intervals(ad_engagement_rate: pd.DataFrame, timestamp_intervals):
+    engagements_per_interval = []
+    for i in range(len(timestamp_intervals) - 1):
+        engagements_per_interval.append(
+            np.array(ad_engagement_rate.loc[(ad_engagement_rate.index < timestamp_intervals[i + 1]) &
+                                            (ad_engagement_rate.index >= timestamp_intervals[i]), 'adEngagement'])
+        )
+
+    significance_between_intervals = []
+    for i in range(len(engagements_per_interval) - 1):
+        significance_between_intervals.append(ranksums(engagements_per_interval[i], engagements_per_interval[i + 1]).pvalue)
+
+    return engagements_per_interval, significance_between_intervals
+
+def boxplot_engagement_distribution(ad_engagement_rate: pd.DataFrame):
+    timestamp_intervals = pd.date_range(start='2015-4-16 10:00', end='2015-4-16 20:00', freq='60Min')
+    engagement_per_interval, _ = compute_significance_between_intervals(
+        ad_engagement_rate,
+        timestamp_intervals
+    )
+
+    _, ax = plt.subplots(figsize=(8, 5))
+    ax.boxplot(engagement_per_interval, labels=(timestamp_intervals + dt.timedelta(minutes = 30)).strftime('%H:%M')[:-1])
+    ax.set_xlabel('Time of day (2015-04-16)')
+    ax.set_ylabel('Engagement rate [%]')
+    ax.set_title('Hourly ad engagement distribution')
+    plt.show()
 
 def plot_add_requested_histogram(df: pd.DataFrame):
     ad_requested_timestamps = df.loc[df['name'] == 'adRequested'][['timestamp', 'sessionId']].copy()
@@ -64,7 +94,6 @@ def plot_add_requested_histogram(df: pd.DataFrame):
     ax.set_xlabel('Time of day (2015-04-16)')
     ax.set_ylabel('Count')
     ax.set_title('Ad requests over time')
-    plt.subplots_adjust(bottom=.15)
     plt.show()
 
 
@@ -81,7 +110,7 @@ def plot_interaction_time_histogram(df: pd.DataFrame):
         (df_start_interaction_time_grouped['hasScreenShown'] > 0) & (df_start_interaction_time_grouped['hasFirstInteraction'] > 0)
     ]
     df_start_interaction_time = df_start_interaction_time.loc[df_start_interaction_time['sessionId'].isin(df_start_interaction_time_grouped['sessionId'])]
-    df_start_interaction_time = df_start_interaction_time.drop(columns=['hasScreenShown', 'hasFirstInteraction'])
+    df_start_interaction_time = df_start_interaction_time.drop(['hasScreenShown', 'hasFirstInteraction'], axis=1)
 
     # find the minimum timestamp for screenShown and firstInteraction events for each session separately
     df_min_timestamps = df_start_interaction_time.groupby(['sessionId', 'name']).min().unstack('name')
@@ -138,9 +167,17 @@ print('Add engagement rate: {:.2f}%'.format(add_engagement_rate)) # 2.14%
 # Exercise 3: start interaction time
 plot_interaction_time_histogram(df)
 
-# Exercise 4.1: interval add engagement rate
-add_engagement_rate_10min = get_interval_add_engagement(df, '10Min')
-plot_interval_add_engagement(add_engagement_rate_10min)
+# Exercise 4.1: interval add engagement rate and statistical significance
+ad_engagement_rate_10min = get_interval_add_engagement(df, '10Min')
+plot_interval_add_engagement(ad_engagement_rate_10min)
 # check significance
+ad_engagement_rate_5min = get_interval_add_engagement(df, '5Min')
+# plot_interval_add_engagement(ad_engagement_rate_5min)
+
+timestamp_intervals = pd.to_datetime(['2015-4-16 10:00', '2015-4-16 11:40', '2015-4-16 16:20', '2015-4-16 20:00'], format='%Y-%m-%d %H:%M')
+engagement_per_interval, significance_between_intervals = compute_significance_between_intervals(ad_engagement_rate_5min, timestamp_intervals)
+
+boxplot_engagement_distribution(ad_engagement_rate_5min)
+
 
 print('Finished!')
