@@ -26,6 +26,7 @@ class CusumChangeDetector:
         self.variance_stream = 0
         self.std = 0
         self.running_window_complete = False
+        self.mean_at_start = [0, 0]
 
     def compute_stream_mean_and_variance(self, added_value, removed_value):
         stream_mean_0 = self.stream_mean
@@ -44,6 +45,7 @@ class CusumChangeDetector:
 
         alarm_index = None
         start_index = None
+        relative_change = None
 
         removed_value = self.running_window[0]
         self.running_window.append(x)
@@ -64,9 +66,11 @@ class CusumChangeDetector:
             if self.control_upper < 0:  # or x[i] < mean_val:
                 self.control_upper = 0
                 self.control_upper_start = index
+                self.mean_at_start[0] = mean_val
             if self.control_lower < 0:  # or x[i] > mean_val:
                 self.control_lower = 0
                 self.control_lower_start = index
+                self.mean_at_start[1] = mean_val
 
             if self.control_upper > threshold or self.control_lower > threshold:
                 # change detected
@@ -75,8 +79,11 @@ class CusumChangeDetector:
                 if self.threshold_surpassed_count > self.min_threshold_steps:
                     alarm_index = index  # alarm index
                     start_index = self.control_upper_start if self.control_upper > threshold else self.control_lower_start
+                    relative_change = self.mean_at_start[0] if self.control_upper > threshold else self.mean_at_start[1]
+                    relative_change = 100 * (mean_val - relative_change) / relative_change
                     self.control_upper, self.control_lower = 0, 0  # reset alarm
                     self.control_upper_start, self.control_lower_start = index, index
+                    self.mean_at_start = [0, 0]
             else:
                 self.threshold_surpassed_count = 0
 
@@ -84,7 +91,7 @@ class CusumChangeDetector:
         if len(self.running_window) == self.window_size:
             self.running_window_complete = True
 
-        return alarm_index, start_index
+        return alarm_index, start_index, relative_change
 
 
 def detect_cusum_offline(data, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean', show=True):
@@ -94,7 +101,7 @@ def detect_cusum_offline(data, threshold_factor=1, min_threshold_steps=0, window
     data_mean, data_std = [data[0]], [0]
 
     for i in range(1, data.size):
-        alarm_index_current, start_index_current = change_detector.add_data_point(data[i], i)
+        alarm_index_current, start_index_current, relative_change = change_detector.add_data_point(data[i], i)
 
         if alarm_index_current is not None:
             alarm_index.append(alarm_index_current)
@@ -140,10 +147,13 @@ if __name__ == '__main__':
 
     from cusumChangeDetector import detect_cusum_offline
 
-    df = pd.read_pickle('objectEngagementRate.npy')
-    df = df.fillna(0).round(decimals=5)
-    # data = np.hstack((np.array(df['Hotspot'][11000::100]),np.array(df['Hotspot'][11000::100])[::-1],np.array(df['Hotspot'][11000::100])))
-    data = np.array(df['Hotspot'][::10])
-    detect_cusum_offline(data, 3, 50, 10000, 'mean', True)
+    # df = pd.read_pickle('objectEngagementRate.npy')
+    # df = df.fillna(0).round(decimals=5)
+    # # data = np.hstack((np.array(df['Hotspot'][11000::100]),np.array(df['Hotspot'][11000::100])[::-1],np.array(df['Hotspot'][11000::100])))
+    # data = np.array(df['Hotspot'][::10])
+    # detect_cusum_offline(data, 3, 50, 10000, 'mean', True)
+
+    data = pd.read_pickle('adEngagementRate.npy')
+    detect_cusum_offline(data, 3, 50, 100000, 'mean', True)
 
     print('Finished')
