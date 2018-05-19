@@ -1,7 +1,9 @@
 import numpy as np
 from collections import deque
 import matplotlib.pyplot as plt
-
+import matplotlib.dates as mdates
+import datetime as dt
+import pandas as pd
 
 class CusumChangeDetector:
     """
@@ -86,6 +88,9 @@ class CusumChangeDetector:
                     self.mean_at_start = [0, 0]
             else:
                 self.threshold_surpassed_count = 0
+        else:
+            self.control_upper_start = index
+            self.control_lower_start = index
 
         self.previous = [x, mean_val, std_val]
         if len(self.running_window) == self.window_size:
@@ -94,14 +99,17 @@ class CusumChangeDetector:
         return alarm_index, start_index, relative_change
 
 
-def detect_cusum_offline(data, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean', show=True):
+def detect_cusum_offline(data, datat=None, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean', show=True):
 
     change_detector = CusumChangeDetector(data[0], threshold_factor,  min_threshold_steps, window_size, mode)
     alarm_index, start_index = [], []
     data_mean, data_std = [data[0]], [0]
 
     for i in range(1, data.size):
-        alarm_index_current, start_index_current, relative_change = change_detector.add_data_point(data[i], i)
+        alarm_index_current, start_index_current, relative_change = change_detector.add_data_point(
+            data[i],
+            i if datat is None else datat[i]
+        )
 
         if alarm_index_current is not None:
             alarm_index.append(alarm_index_current)
@@ -111,31 +119,51 @@ def detect_cusum_offline(data, threshold_factor=1, min_threshold_steps=0, window
         data_std.append(change_detector.previous[2])
 
     if show:
-        plot_detections(data, threshold_factor, min_threshold_steps, window_size, alarm_index, start_index, np.array(data_mean), 3 * np.array(data_std))
+        plot_detections(data, datat, alarm_index, start_index, np.array(data_mean), 3 * np.array(data_std))
 
 
-def plot_detections(data, threshold, threshold_steps, window_size, alarm_index, start_index, xmean, xstd):
+def plot_detections(data, datat, alarm_index, start_index, xmean, xstd):
     """Plot results of the detect_cusum function"""
+
+    t = datat
+    if t is None:
+        t = range(data.size)
+        alarm_index_t = alarm_index
+        start_index_t = start_index
+    elif isinstance(t, pd.DatetimeIndex):
+        dt_df = pd.DataFrame(index=t, data={'data': data, 'xmean': xmean, 'xstd': xstd})
+        dt_df = dt_df.loc[~dt_df.index.duplicated(keep='first')]
+        alarm_index_t = [dt_df.index.get_loc(aidx, method='nearest') for aidx in alarm_index]
+        start_index_t = [dt_df.index.get_loc(sidx, method='nearest') for sidx in start_index]
+        t = dt_df.index
+        data = dt_df['data'].values
+        xmean = dt_df['xmean'].values
+        xstd = dt_df['xstd'].values
+    else:
+        alarm_index_t = [np.nonzero(np.abs(t - aidx) < 1e-6)[0][0] for aidx in alarm_index]
+        start_index_t = [np.nonzero(np.abs(t - sidx) < 1e-6)[0][0] for sidx in start_index]
 
     _, ax = plt.subplots(figsize=(8, 5))
 
-    t = range(data.size)
     ax.plot(t, data, 'b-', lw=2)
     ax.plot(t, xmean, 'r-', lw=2, alpha=0.7)
     ax.fill_between(t, xmean-xstd, xmean+xstd, color='green', alpha=0.3, interpolate=True)
     if len(alarm_index):
-        ax.plot(start_index, xmean[start_index], '>', mfc='g', mec='g', ms=10, label='Start')
-        ax.plot(alarm_index, xmean[alarm_index], 'o', mfc='r', mec='y', mew=1, ms=10, label='Alarm')
+        ax.plot(start_index, xmean[start_index_t], '>', mfc='g', mec='g', ms=10, label='Start')
+        ax.plot(alarm_index, xmean[alarm_index_t], 'o', mfc='r', mec='y', mew=1, ms=10, label='Alarm')
         ax.legend(loc='best', framealpha=.5, numpoints=1)
-    ax.set_xlim(-.01 * data.size, data.size * 1.01 - 1)
+    #ax.set_xlim(-.01 * data.size, data.size * 1.01 - 1)
+    ax.set_xlim(t[0], t[-1])
     ax.set_xlabel('Data points', fontsize=14)
+    if isinstance(t, pd.DatetimeIndex):
+        ax.xaxis.set_major_locator(mdates.HourLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        ax.set_xlabel('Time of day', fontsize=14)
     ax.set_ylabel('Ad engagement rate', fontsize=14)
     ymin, ymax = data[np.isfinite(data)].min(), data[np.isfinite(data)].max()
     yrange = ymax - ymin if ymax > ymin else 1
     ax.set_ylim(ymin - 0.1*yrange, ymax + 0.1*yrange)
-    ax.set_title('Time series and detected changes ' +
-                  '(threshold= %.3g * sigma, min len= %d, win size= %d): N changes = %d'
-                  % (threshold, threshold_steps, window_size, len(start_index)))
+    ax.set_title('Time series with detected changes {:d}'.format(len(start_index)))
     plt.tight_layout()
     plt.show()
 
@@ -153,7 +181,16 @@ if __name__ == '__main__':
     # data = np.array(df['Hotspot'][::10])
     # detect_cusum_offline(data, 3, 50, 10000, 'mean', True)
 
+    # data = pd.read_pickle('errorRate.npy')
     data = pd.read_pickle('adEngagementRate.npy')
-    detect_cusum_offline(data, 3, 50, 100000, 'mean', True)
+    # plot x-axis as %H:%M
+    data_time = pd.read_pickle('dataTimestamps.npy')
+    data_time_dt = pd.to_datetime(data_time, unit='s')
+    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True)
+    # # plot x-axis as datapoints
+    # detect_cusum_offline(data, None, 3, 50, 100000, 'mean', True)
+    # # plot x-axis as unix timestamps
+    # data_time = pd.read_pickle('dataTimestamps.npy')
+    # detect_cusum_offline(data, data_time, 3, 50, 100000, 'mean', True)
 
     print('Finished')
