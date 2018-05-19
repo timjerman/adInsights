@@ -98,7 +98,7 @@ def get_interval_add_engagement_attributes(df: pd.DataFrame, interval='10min', a
     return interval_engagement
 
 
-def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame, absolute=False):
+def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame, absolute=False, save_name=None):
     add_engagement_interval_rate = add_engagement_interval_rate.copy()
     add_engagement_interval_rate = add_engagement_interval_rate.rename(
         columns={'adEngagement': 'Engagement', ('attributes'if absolute else 'count'): 'Count' })
@@ -111,9 +111,11 @@ def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame, abs
     ax.set_title('Ad engagement over time')
     ax.xaxis.set_major_locator(mdates.HourLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    if save_name is not None:
+        plt.savefig(save_name)
     plt.show()
 
-def plot_multiple_engagement_rates(index, interaction_count, count, labels, title):
+def plot_multiple_engagement_rates(index, interaction_count, count, labels, title, save_name=None):
     fig, ax = plt.subplots(figsize=(8, 5))
     for arr, lab in zip(100 * np.array(interaction_count) / np.array(count), labels):
         ax.plot(index, arr, label=lab)
@@ -123,6 +125,8 @@ def plot_multiple_engagement_rates(index, interaction_count, count, labels, titl
     ax.set_title(title)
     ax.xaxis.set_major_locator(mdates.HourLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    if save_name is not None:
+        plt.savefig(save_name)
     plt.show()
 
 def compute_significance_between_intervals(ad_engagement_rate: pd.DataFrame, timestamp_intervals):
@@ -139,7 +143,7 @@ def compute_significance_between_intervals(ad_engagement_rate: pd.DataFrame, tim
 
     return engagements_per_interval, significance_between_intervals
 
-def boxplot_engagement_distribution(ad_engagement_rate: pd.DataFrame):
+def boxplot_engagement_distribution(ad_engagement_rate: pd.DataFrame, save_name=None):
     timestamp_intervals = pd.date_range(start='2015-4-16 10:00', end='2015-4-16 20:00', freq='60Min')
     engagement_per_interval, _ = compute_significance_between_intervals(
         ad_engagement_rate,
@@ -151,9 +155,11 @@ def boxplot_engagement_distribution(ad_engagement_rate: pd.DataFrame):
     ax.set_xlabel('Time of day (2015-04-16)')
     ax.set_ylabel('Engagement rate [%]')
     ax.set_title('Hourly ad engagement distribution')
+    if save_name is not None:
+        plt.savefig(save_name)
     plt.show()
 
-def plot_add_requested_histogram(df: pd.DataFrame):
+def plot_add_requested_histogram(df: pd.DataFrame, save_name=None):
     ad_requested_timestamps = df.loc[df['name'] == 'adRequested'][['timestamp', 'sessionId']].copy()
     ad_requested_timestamps['timestamp'] = pd.to_datetime(ad_requested_timestamps['timestamp'], unit='s')
     ad_requested_timestamps_grouped = ad_requested_timestamps.groupby(
@@ -163,10 +169,12 @@ def plot_add_requested_histogram(df: pd.DataFrame):
     ax.set_xlabel('Time of day (2015-04-16)')
     ax.set_ylabel('Count')
     ax.set_title('Ad requests over time')
+    if save_name is not None:
+        plt.savefig(save_name)
     plt.show()
 
 
-def plot_interaction_time_histogram(df: pd.DataFrame):
+def plot_interaction_time_histogram(df: pd.DataFrame, save_name=None):
     # first reduce the dataset only to the needed data
     df_start_interaction_time = df[['sessionId', 'name', 'clientTimestamp']].copy()
     df_start_interaction_time = df_start_interaction_time.loc[df_start_interaction_time['name'].isin(['screenShown', 'firstInteraction'])]
@@ -198,6 +206,8 @@ def plot_interaction_time_histogram(df: pd.DataFrame):
     ax.set_xlabel('Time [s]')
     ax.set_ylabel('Count')
     ax.set_title('Time to interaction')
+    if save_name is not None:
+        plt.savefig(save_name[0])
     plt.show()
 
     print('Median time difference: {:.2f} s'.format(np.median(timestamp_diff)))
@@ -218,6 +228,8 @@ def plot_interaction_time_histogram(df: pd.DataFrame):
     ax.set_xlabel('Time [s]')
     ax.set_ylabel('Percentage')
     ax.set_title('Time to interaction (whole range)')
+    if save_name is not None:
+        plt.savefig(save_name[1])
     plt.show()
 
 
@@ -227,26 +239,26 @@ file_reader = dataLoader.FileReader(file_name)
 df = file_reader.load_data(use_already_preprocessed=True, save_preprocessed=True)
 
 # Exercise 1: plot histogram of ad request timestamps
-plot_add_requested_histogram(df)
+plot_add_requested_histogram(df, save_name='adRequestedHistogram.png')
 
 # Exercise 2: overall ad engagement rate
 add_engagement_rate = get_overall_add_engagement(df)
 print('Add engagement rate: {:.2f}%'.format(add_engagement_rate)) # 2.14%
 
 # Exercise 3: start interaction time
-plot_interaction_time_histogram(df)
+plot_interaction_time_histogram(df, save_name=['interactionTimeHistogram.png', 'interactionTimeCumsum.png'])
 
 # Exercise 4.1: interval add engagement rate and statistical significance
 ad_engagement_rate_10min = get_interval_add_engagement(df, '10Min')
-plot_interval_add_engagement(ad_engagement_rate_10min)
+plot_interval_add_engagement(ad_engagement_rate_10min, save_name='adEngagement10Min.png')
 # check significance
 ad_engagement_rate_5min = get_interval_add_engagement(df, '5Min')
-# plot_interval_add_engagement(ad_engagement_rate_5min)
+plot_interval_add_engagement(ad_engagement_rate_5min, save_name='adEngagement5Min.png')
 
 timestamp_intervals = pd.to_datetime(['2015-4-16 10:00', '2015-4-16 11:40', '2015-4-16 16:20', '2015-4-16 20:00'], format='%Y-%m-%d %H:%M')
 engagement_per_interval, significance_between_intervals = compute_significance_between_intervals(ad_engagement_rate_5min, timestamp_intervals)
 
-boxplot_engagement_distribution(ad_engagement_rate_5min)
+boxplot_engagement_distribution(ad_engagement_rate_5min, save_name='adEngagementBoxPlotDistribution5Min.png')
 
 # Exercise 4.2: interval add engagement rate based on attributes
 sdk_unique = df.loc[df['sdk'].notnull(), 'sdk'].unique()
@@ -261,8 +273,8 @@ for sdk in sdk_unique:
     count_attr.append(ad_engagement_rate_10min['attributes'])
     count.append(ad_engagement_rate_10min['count'])
 
-plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count_attr, sdk_unique, 'Absolute SDK engagement over time')
-plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count, sdk_unique, 'SDK engagement over time')
+plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count_attr, sdk_unique, 'Absolute SDK engagement over time', save_name='sdkAbsoluteEngagement10Min.png')
+plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count, sdk_unique, 'SDK engagement over time', save_name='sdkEngagement10Min.png')
 
 attr_interacted = []
 count = []
@@ -273,7 +285,7 @@ for obj in object_clazz_unique:
     count_attr.append(ad_engagement_rate_10min['attributes'])
     count.append(ad_engagement_rate_10min['count'])
 
-plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count, object_clazz_unique, 'Object engagement over time')
+plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count, object_clazz_unique, 'Object engagement over time', save_name='objectEngagement10Min.png')
 
 
 print('Finished!')
