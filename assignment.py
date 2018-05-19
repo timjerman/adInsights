@@ -116,6 +116,11 @@ def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame, abs
     plt.show()
 
 def plot_multiple_engagement_rates(index, interaction_count, count, labels, title, save_name=None):
+
+    count = np.array(count)
+    interaction_count = np.array(interaction_count)
+    interaction_count[count == 0] = 0
+    count[count == 0] = 1
     fig, ax = plt.subplots(figsize=(8, 5))
     for arr, lab in zip(100 * np.array(interaction_count) / np.array(count), labels):
         ax.plot(index, arr, label=lab)
