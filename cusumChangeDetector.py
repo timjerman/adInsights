@@ -10,11 +10,11 @@ class CusumChangeDetector:
     Cumulative sum algorithm (CUSUM) for online change detection
     """
 
-    def __init__(self, data_0, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean'):
+    def __init__(self, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean'):
         self.threshold_factor = threshold_factor
         self.min_threshold_steps = min_threshold_steps
         self.window_size = window_size
-        self.running_window = deque([data_0], window_size)
+        self.running_window = deque([], window_size)
         self.control_upper = 0
         self.control_lower = 0
         self.alarm_index = 0
@@ -23,23 +23,27 @@ class CusumChangeDetector:
         self.control_lower_start = 0
         self.threshold_surpassed_count = 0
         self.mode = mode
-        self.previous = [data_0, data_0, 0] # data point, mean, std of the last computation
-        self.stream_mean = data_0
+        self.previous = [0, 0, 0]  # data point, mean, std of the last computation
+        self.stream_mean = None
         self.variance_stream = 0
         self.std = 0
         self.running_window_complete = False
         self.mean_at_start = [0, 0]
 
     def compute_stream_mean_and_variance(self, added_value, removed_value):
-        stream_mean_0 = self.stream_mean
-        if self.running_window_complete:
-            self.stream_mean = (self.window_size * stream_mean_0 + added_value - removed_value) / self.window_size
-            self.variance_stream = self.variance_stream + (added_value + removed_value - self.stream_mean - stream_mean_0) * (added_value - removed_value)
-            self.std = np.sqrt(self.variance_stream / (self.window_size - 1))
+        if self.stream_mean is None:
+            self.stream_mean = added_value
+            self.variance_stream = 0
         else:
-            self.stream_mean = (added_value + (len(self.running_window) - 1) * stream_mean_0) / ((len(self.running_window) - 1) + 1)
-            self.variance_stream = self.variance_stream + (added_value - stream_mean_0) * (added_value - self.stream_mean)
-            self.std = np.sqrt(self.variance_stream / len(self.running_window))
+            stream_mean_0 = self.stream_mean
+            if self.running_window_complete:
+                self.stream_mean = (self.window_size * stream_mean_0 + added_value - removed_value) / self.window_size
+                self.variance_stream = self.variance_stream + (added_value + removed_value - self.stream_mean - stream_mean_0) * (added_value - removed_value)
+                self.std = np.sqrt(self.variance_stream / (self.window_size - 1))
+            else:
+                self.stream_mean = (added_value + (len(self.running_window) - 1) * stream_mean_0) / ((len(self.running_window) - 1) + 1)
+                self.variance_stream = self.variance_stream + (added_value - stream_mean_0) * (added_value - self.stream_mean)
+                self.std = np.sqrt(self.variance_stream / len(self.running_window))
 
         return self.stream_mean, self.std
 
@@ -49,7 +53,7 @@ class CusumChangeDetector:
         start_index = None
         relative_change = None
 
-        removed_value = self.running_window[0]
+        removed_value = self.running_window[0] if len(self.running_window) > 0 else 0
         self.running_window.append(x)
         mean_val, std_val = self.compute_stream_mean_and_variance(x, removed_value)  #np.mean(self.running_window)
 
@@ -82,15 +86,16 @@ class CusumChangeDetector:
                     alarm_index = index  # alarm index
                     start_index = self.control_upper_start if self.control_upper > threshold else self.control_lower_start
                     relative_change = self.mean_at_start[0] if self.control_upper > threshold else self.mean_at_start[1]
-                    relative_change = 100 * (mean_val - relative_change) / relative_change
+                    relative_change = 100 * (mean_val - relative_change) / (relative_change + 1e-6)
                     self.control_upper, self.control_lower = 0, 0  # reset alarm
                     self.control_upper_start, self.control_lower_start = index, index
-                    self.mean_at_start = [0, 0]
+                    self.mean_at_start = [mean_val, mean_val]
             else:
                 self.threshold_surpassed_count = 0
         else:
             self.control_upper_start = index
             self.control_lower_start = index
+            self.mean_at_start = [mean_val, mean_val]
 
         self.previous = [x, mean_val, std_val]
         if len(self.running_window) == self.window_size:
@@ -101,11 +106,11 @@ class CusumChangeDetector:
 
 def detect_cusum_offline(data, datat=None, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean', show=True, ylabel=None):
 
-    change_detector = CusumChangeDetector(data[0], threshold_factor,  min_threshold_steps, window_size, mode)
+    change_detector = CusumChangeDetector(threshold_factor,  min_threshold_steps, window_size, mode)
     alarm_index, start_index = [], []
-    data_mean, data_std = [data[0]], [0]
+    data_mean, data_std = [], []
 
-    for i in range(1, data.size):
+    for i in range(data.size):
         alarm_index_current, start_index_current, relative_change = change_detector.add_data_point(
             data[i],
             i if datat is None else datat[i]
