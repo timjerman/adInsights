@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 
 from cusumChangeDetector import CusumChangeDetector
 from streamEngagement import StreamAdEngagement
@@ -11,7 +10,7 @@ file_reader = dataLoader.FileReader(file_name, suffix=dataLoader.FileReader.SORT
 file_reader.sort_input_data(use_already_preprocessed=True, save_preprocessed=True)
 file_name = file_reader.processed_file_name
 
-enagement_window_size = 10000
+engagement_window_size = 10000
 detector_window_size = 100000
 
 engagement_rate = []
@@ -22,7 +21,7 @@ engagement_rate_object = {}
 engagement_rate_sdk_absolute = {}
 line_count = 0
 
-stream_ad_engagement = StreamAdEngagement(window_size=enagement_window_size)
+stream_ad_engagement = StreamAdEngagement(window_size=engagement_window_size)
 change_detector = CusumChangeDetector(3, 50, detector_window_size, 'mean')
 change_detector_error = CusumChangeDetector(3, 50, detector_window_size, 'mean')
 change_detector_sdk = CusumChangeDetector(3, 50, detector_window_size, 'mean')
@@ -44,7 +43,7 @@ with open(file_name) as stream:
             engagement_rate_object[line_count] = stream_engagement_return[5]
 
             # start detection only after the engagement mean stabilizes
-            if line_count > 0.5 * enagement_window_size:
+            if line_count > 0.5 * engagement_window_size:
 
                 alarm, start_timestamp, relative_change = change_detector.add_data_point(stream_engagement_return[1], stream_engagement_return[0])
                 if alarm is not None:
