@@ -16,7 +16,9 @@ def get_overall_add_engagement(df: pd.DataFrame):
     return add_engagement_rate
 
 
-def get_interval_add_engagement(df: pd.DataFrame, interval='10min'):
+def get_interval_add_engagement(df: pd.DataFrame, interval='10min', attributes=None, absolute=False):
+    if attributes is None:
+        attributes = {}
     df_engagement = df[['sessionId', 'name', 'timestamp', 'sdk', 'objectClazz']].copy()
 
     # propagate sdk to all lines of the same session
@@ -26,24 +28,80 @@ def get_interval_add_engagement(df: pd.DataFrame, interval='10min'):
 
     df_engagement['interacted'] = (df_engagement['name'] == 'interaction') | \
                                   (df_engagement['name'] == 'firstInteraction')
-    session_interacted = df_engagement[['sessionId', 'interacted', 'timestamp']].groupby('sessionId').agg(
-        {'interacted': 'sum', 'timestamp': 'min'})
+
+    df_engagement['attributes'] = ((df_engagement['sdk_mapped'] == attributes['sdk']) if 'sdk' in attributes else True) & \
+                                  ((df_engagement['objectClazz'] == attributes['objectClazz']) if 'objectClazz' in attributes else True)
+
+    session_interacted = df_engagement[['sessionId', 'interacted', 'timestamp', 'attributes']].groupby('sessionId').agg(
+        {'interacted': 'sum', 'timestamp': 'min', 'attributes': 'sum'})
+    session_interacted['attributes_interacted'] = (
+            (session_interacted['attributes'] > 0) & (session_interacted['interacted'] > 0)
+    ).astype('int')
     session_interacted['interacted'] = (session_interacted['interacted'] > 0).astype('int')
+    session_interacted['attributes'] = (session_interacted['attributes'] > 0).astype('int')
+
     session_interacted['count'] = 1
     session_interacted['timestamp'] = pd.to_datetime(session_interacted['timestamp'], unit='s')
     interval_engagement = session_interacted.groupby([pd.Grouper(key='timestamp', freq=interval)]).sum()
-    interval_engagement['adEngagement'] = 100 * interval_engagement['interacted'] / interval_engagement['count']
-
+    if len(attributes) == 0:
+        interval_engagement['adEngagement'] = 100 * interval_engagement['interacted'] / interval_engagement['count']
+    elif absolute:
+        interval_engagement['adEngagement'] = 100 * interval_engagement['attributes_interacted'] / interval_engagement[
+            'attributes']
+    else:
+        interval_engagement['adEngagement'] = 100 * interval_engagement['attributes_interacted'] / interval_engagement[
+            'count']
     # compute interaction rate using a rolling mean
     #session_interacted['interacted'].rolling(10000).mean()
 
     return interval_engagement
 
 
-def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame):
+def get_interval_add_engagement_attributes(df: pd.DataFrame, interval='10min', attributes=None, absolute=False):
+    if attributes is None:
+        attributes = {}
+    df_engagement = df[['sessionId', 'name', 'timestamp', 'sdk', 'objectClazz']].copy()
+
+    # propagate sdk to all lines of the same session
+    session_sdk = df_engagement.loc[df_engagement['sdk'].notnull(), ['sessionId', 'sdk']]
+    sdk_dict = dict(zip(session_sdk['sessionId'], session_sdk['sdk']))
+    df_engagement['sdk_mapped'] = df_engagement['sessionId'].map(sdk_dict)
+
+    df_engagement['interacted'] = (df_engagement['name'] == 'interaction') | \
+                                  (df_engagement['name'] == 'firstInteraction')
+
+    df_engagement['attributes'] = ((df_engagement['sdk_mapped'] == attributes[
+        'sdk']) if 'sdk' in attributes else True) & ((df_engagement['objectClazz'] == attributes[
+        'objectClazz']) if 'objectClazz' in attributes else True)
+
+    session_interacted = df_engagement[['sessionId', 'interacted', 'timestamp', 'attributes']].groupby('sessionId').agg(
+        {'interacted': 'sum', 'timestamp': 'min', 'attributes': 'sum'})
+    session_interacted['attributes_interacted'] = (
+                (session_interacted['attributes'] > 0) & (session_interacted['interacted'] > 0)).astype('int')
+    session_interacted['interacted'] = (session_interacted['interacted'] > 0).astype('int')
+    session_interacted['attributes'] = (session_interacted['attributes'] > 0).astype('int')
+
+    session_interacted['count'] = 1
+    session_interacted['timestamp'] = pd.to_datetime(session_interacted['timestamp'], unit='s')
+    interval_engagement = session_interacted.groupby([pd.Grouper(key='timestamp', freq=interval)]).sum()
+    if len(attributes) == 0:
+        interval_engagement['adEngagement'] = 100 * interval_engagement['interacted'] / interval_engagement['count']
+    elif absolute:
+        interval_engagement['adEngagement'] = 100 * interval_engagement['attributes_interacted'] / interval_engagement[
+            'attributes']
+    else:
+        interval_engagement['adEngagement'] = 100 * interval_engagement['attributes_interacted'] / interval_engagement[
+            'count']
+    # compute interaction rate using a rolling mean
+    #session_interacted['interacted'].rolling(10000).mean()
+
+    return interval_engagement
+
+
+def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame, absolute=False):
     add_engagement_interval_rate = add_engagement_interval_rate.copy()
     add_engagement_interval_rate = add_engagement_interval_rate.rename(
-        columns={'adEngagement': 'Engagement', 'count': 'Count'})
+        columns={'adEngagement': 'Engagement', ('attributes'if absolute else 'count'): 'Count' })
     ax = add_engagement_interval_rate[['Count', 'Engagement']].plot(secondary_y='Engagement', legend=True,
                                                                     color=['#63ea8c', '#8383d3'], linewidth=2.5,
                                                                     figsize=(8, 5))
@@ -55,6 +113,17 @@ def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame):
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     plt.show()
 
+def plot_multiple_engagement_rates(index, interaction_count, count, labels, title):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for arr, lab in zip(100 * np.array(interaction_count) / np.array(count), labels):
+        ax.plot(index, arr, label=lab)
+    ax.legend(loc='best', framealpha=.5)
+    ax.set_xlabel('Time of day (2015-04-16)')
+    ax.set_ylabel('Engagement rate [%]')
+    ax.set_title(title)
+    ax.xaxis.set_major_locator(mdates.HourLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    plt.show()
 
 def compute_significance_between_intervals(ad_engagement_rate: pd.DataFrame, timestamp_intervals):
     engagements_per_interval = []
@@ -178,6 +247,33 @@ timestamp_intervals = pd.to_datetime(['2015-4-16 10:00', '2015-4-16 11:40', '201
 engagement_per_interval, significance_between_intervals = compute_significance_between_intervals(ad_engagement_rate_5min, timestamp_intervals)
 
 boxplot_engagement_distribution(ad_engagement_rate_5min)
+
+# Exercise 4.2: interval add engagement rate based on attributes
+sdk_unique = df.loc[df['sdk'].notnull(), 'sdk'].unique()
+object_clazz_unique = df.loc[df['objectClazz'].notnull(), 'objectClazz'].unique()
+
+attr_interacted = []
+count = []
+count_attr = []
+for sdk in sdk_unique:
+    ad_engagement_rate_10min = get_interval_add_engagement(df, '10Min', {'sdk': sdk}, False)
+    attr_interacted.append(ad_engagement_rate_10min['attributes_interacted'])
+    count_attr.append(ad_engagement_rate_10min['attributes'])
+    count.append(ad_engagement_rate_10min['count'])
+
+plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count_attr, sdk_unique, 'Absolute SDK engagement over time')
+plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count, sdk_unique, 'SDK engagement over time')
+
+attr_interacted = []
+count = []
+count_attr = []
+for obj in object_clazz_unique:
+    ad_engagement_rate_10min = get_interval_add_engagement(df, '10Min', {'objectClazz': obj}, False)
+    attr_interacted.append(ad_engagement_rate_10min['attributes_interacted'])
+    count_attr.append(ad_engagement_rate_10min['attributes'])
+    count.append(ad_engagement_rate_10min['count'])
+
+plot_multiple_engagement_rates(ad_engagement_rate_10min.index, attr_interacted, count, object_clazz_unique, 'Object engagement over time')
 
 
 print('Finished!')
