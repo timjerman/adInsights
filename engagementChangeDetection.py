@@ -45,7 +45,7 @@ class AdSessionWindow(OrderedDict):
     engagement_rate = 0
     error_rate = 0
     engagement_by_sdk = {}
-    engagement_by_sdk_relative = {}
+    engagement_by_sdk_absolute = {}
     engagement_by_object = {}
     number_of_interactions = 0
     error_count = 0
@@ -70,7 +70,7 @@ class AdSessionWindow(OrderedDict):
         self.error_rate = 100 * self.error_count / len(self)
         if self.requested_and_live_count > 0:
             self.engagement_rate = 100 * self.number_of_interactions / self.requested_and_live_count
-            self.engagement_by_sdk_relative = {k: 100 * v / self.requested_and_live_count for k, v in self.number_of_interactions_by_sdk.items()}
+            self.engagement_by_sdk_absolute = {k: 100 * v / self.requested_and_live_count for k, v in self.number_of_interactions_by_sdk.items()}
             self.engagement_by_object = {k: 100 * v / self.requested_and_live_count for k, v in self.number_of_interactions_by_object.items()}
 
         self.engagement_by_sdk = {k: 100 * AdSessionWindow.divide(v, self.count_by_sdk[k]) for k, v in self.number_of_interactions_by_sdk.items()}
@@ -224,7 +224,7 @@ class StreamAdEngagement:
             self.streamed_data_window.engagement_rate,
             self.streamed_data_window.error_rate,
             self.streamed_data_window.engagement_by_sdk,
-            self.streamed_data_window.engagement_by_sdk_relative,
+            self.streamed_data_window.engagement_by_sdk_absolute,
             self.streamed_data_window.engagement_by_object
         )
 
@@ -238,15 +238,17 @@ if __name__ == '__main__':
     file_reader.sort_input_data(use_already_preprocessed=True, save_preprocessed=True)
     file_name = file_reader.processed_file_name
 
+    window_size = 10000
+
     engagement_rate = []
     error_rate = []
     data_timestamp = []
     engagement_rate_sdk = {}
     engagement_rate_object = {}
-    engagement_rate_sdk_relative = {}
+    engagement_rate_sdk_absolute = {}
     line_count = 0
 
-    stream_ad_engagement = StreamAdEngagement(window_size=10000)
+    stream_ad_engagement = StreamAdEngagement(window_size=window_size)
 
     with open(file_name) as stream:
         for stream_line_json in stream:
@@ -258,17 +260,18 @@ if __name__ == '__main__':
                 engagement_rate.append(stream_engagement_return[1])
                 error_rate.append(stream_engagement_return[2])
                 engagement_rate_sdk[line_count] = stream_engagement_return[3]
-                engagement_rate_sdk_relative[line_count] = stream_engagement_return[4]
+                engagement_rate_sdk_absolute[line_count] = stream_engagement_return[4]
                 engagement_rate_object[line_count] = stream_engagement_return[5]
 
                 line_count += 1
 
-    np.array(data_timestamp).dump('dataTimestamps.npy')
-    np.array(engagement_rate).dump('adEngagementRate.npy')
-    np.array(error_rate).dump('errorRate.npy')
-    pd.DataFrame.from_dict(engagement_rate_object).transpose().to_pickle('objectEngagementRate.npy')
-    pd.DataFrame.from_dict(engagement_rate_sdk).transpose().to_pickle('sdkEngagementRate.npy')
-    pd.DataFrame.from_dict(engagement_rate_sdk_relative).transpose().to_pickle('sdkRelativeEngagementRate.npy')
+    # remove a few values at the beginning (half window size) where the engagement rate is not yet precise
+    np.array(data_timestamp[window_size//2:]).dump('dataTimestamps.npy')
+    np.array(engagement_rate[window_size//2:]).dump('adEngagementRate.npy')
+    np.array(error_rate[window_size//2:]).dump('errorRate.npy')
+    pd.DataFrame.from_dict(engagement_rate_object).transpose()[window_size//2:].to_pickle('objectEngagementRate.npy')
+    pd.DataFrame.from_dict(engagement_rate_sdk).transpose()[window_size//2:].to_pickle('sdkEngagementRate.npy')
+    pd.DataFrame.from_dict(engagement_rate_sdk_absolute).transpose()[window_size // 2:].to_pickle('sdkAbsoluteEngagementRate.npy')
 
     # # plots
     # import numpy as np
