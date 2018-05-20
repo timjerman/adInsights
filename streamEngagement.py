@@ -67,7 +67,7 @@ class AdSessionWindow(OrderedDict):
 
     def update_engagement_rate(self):
 
-        self.error_rate = 100 * self.error_count / len(self)
+        self.error_rate = 100 * self.error_count / self.requested_and_live_count
         if self.requested_and_live_count > 0:
             self.engagement_rate = 100 * self.number_of_interactions / self.requested_and_live_count
             self.engagement_by_sdk_absolute = {k: 100 * v / self.requested_and_live_count for k, v in self.number_of_interactions_by_sdk.items()}
