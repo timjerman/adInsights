@@ -228,6 +228,10 @@ plot_interval_add_engagement(ad_engagement_rate_5min, save_name='adEngagement5Mi
 
 timestamp_intervals = pd.to_datetime(['2015-4-16 10:00', '2015-4-16 11:40', '2015-4-16 16:20', '2015-4-16 20:00'], format='%Y-%m-%d %H:%M')
 engagement_per_interval, significance_between_intervals = compute_significance_between_intervals(ad_engagement_rate_5min, timestamp_intervals)
+print('Time intervals:')
+print(timestamp_intervals)
+print('Significance between consecutive intervals:')
+print(significance_between_intervals)
 
 boxplot_engagement_distribution(ad_engagement_rate_5min, save_name='adEngagementBoxPlotDistribution5Min.png')
 
