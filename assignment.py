@@ -73,7 +73,7 @@ def plot_interval_add_engagement(add_engagement_interval_rate: pd.DataFrame, abs
     ax.xaxis.set_major_locator(mdates.HourLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     if save_name is not None:
-        plt.savefig(save_name)
+        plt.savefig(save_name, bbox_inches='tight')
     plt.show()
 
 
@@ -93,7 +93,7 @@ def plot_multiple_engagement_rates(index, interaction_count, count, labels, titl
     ax.xaxis.set_major_locator(mdates.HourLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     if save_name is not None:
-        plt.savefig(save_name)
+        plt.savefig(save_name, bbox_inches='tight')
     plt.show()
 
 
@@ -125,7 +125,7 @@ def boxplot_engagement_distribution(ad_engagement_rate: pd.DataFrame, save_name=
     ax.set_ylabel('Engagement rate [%]')
     ax.set_title('Hourly ad engagement distribution')
     if save_name is not None:
-        plt.savefig(save_name)
+        plt.savefig(save_name, bbox_inches='tight')
     plt.show()
 
 
@@ -139,8 +139,9 @@ def plot_add_requested_histogram(df: pd.DataFrame, save_name=None):
     ax.set_xlabel('Time of day (2015-04-16)')
     ax.set_ylabel('Count')
     ax.set_title('Ad requests over time')
+    plt.subplots_adjust(bottom=.15)
     if save_name is not None:
-        plt.savefig(save_name)
+        plt.savefig(save_name, bbox_inches='tight')
     plt.show()
 
 
@@ -177,7 +178,7 @@ def plot_interaction_time_histogram(df: pd.DataFrame, save_name=None):
     ax.set_ylabel('Count')
     ax.set_title('Time to interaction')
     if save_name is not None:
-        plt.savefig(save_name[0])
+        plt.savefig(save_name[0], bbox_inches='tight')
     plt.show()
 
     print('Median time difference: {:.2f} s'.format(np.median(timestamp_diff)))
@@ -195,11 +196,11 @@ def plot_interaction_time_histogram(df: pd.DataFrame, save_name=None):
     ax.set_xlim(0.1, 3600)
     ax.set_ylim(0, 100)
     plt.grid(True, which='both', ls='--')
-    ax.set_xlabel('Time [s]')
+    ax.set_xlabel('Log10(Time) [s]')
     ax.set_ylabel('Percentage')
     ax.set_title('Time to interaction (whole range)')
     if save_name is not None:
-        plt.savefig(save_name[1])
+        plt.savefig(save_name[1], bbox_inches='tight')
     plt.show()
 
 
