@@ -104,7 +104,8 @@ class CusumChangeDetector:
         return alarm_index, start_index, relative_change
 
 
-def detect_cusum_offline(data, datat=None, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean', show=True, ylabel=None):
+def detect_cusum_offline(data, datat=None, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean',
+                         show=True, ylabel=None, save_name=None):
 
     change_detector = CusumChangeDetector(threshold_factor,  min_threshold_steps, window_size, mode)
     alarm_index, start_index = [], []
@@ -125,6 +126,9 @@ def detect_cusum_offline(data, datat=None, threshold_factor=1, min_threshold_ste
 
     if show:
         plot_detections(data, datat, alarm_index, start_index, np.array(data_mean), 3 * np.array(data_std), ylabel)
+        if save_name is not None:
+            plt.savefig(save_name, bbox_inches='tight')
+        plt.show()
 
 
 def plot_detections(data, datat, alarm_index, start_index, xmean, xstd, ylabel=None):
@@ -173,7 +177,6 @@ def plot_detections(data, datat, alarm_index, start_index, xmean, xstd, ylabel=N
     ax.set_ylim(ymin - 0.1*yrange, ymax + 0.1*yrange)
     ax.set_title('Time series with detected changes [{:d}]'.format(len(start_index)))
     plt.tight_layout()
-    plt.show()
 
 
 if __name__ == '__main__':
@@ -187,7 +190,7 @@ if __name__ == '__main__':
     # plot x-axis as %H:%M
     data_time = pd.read_pickle('dataTimestamps.npy')
     data_time_dt = pd.to_datetime(data_time, unit='s')
-    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True, 'Ad engagement rate')
+    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True, 'Ad engagement rate', save_name='changeDetectorAdEngagment.png' )
     # # plot x-axis as datapoints
     # detect_cusum_offline(data, None, 3, 50, 100000, 'mean', True)
     # # plot x-axis as unix timestamps
@@ -199,7 +202,7 @@ if __name__ == '__main__':
     data = pd.read_pickle('errorRate.npy')
     data_time = pd.read_pickle('dataTimestamps.npy')
     data_time_dt = pd.to_datetime(data_time, unit='s')
-    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True, 'Error rate')
+    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True, 'Error rate', save_name='changeDetectoErrorRate.png' )
 
     # sdk [MobileWeb] engagement rate
     data = pd.read_pickle('sdkEngagementRate.npy')
@@ -207,7 +210,7 @@ if __name__ == '__main__':
     data = np.array(data['MobileWeb'])
     data_time = pd.read_pickle('dataTimestamps.npy')
     data_time_dt = pd.to_datetime(data_time, unit='s')
-    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True, 'Ad engagement rate [MobileWeb]')
+    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True, 'Ad engagement rate [MobileWeb]', save_name='changeDetectorMobileWeb.png' )
 
     # # sdk [MobileWeb] absolute engagement rate
     data = pd.read_pickle('sdkAbsoluteEngagementRate.npy')
@@ -215,6 +218,6 @@ if __name__ == '__main__':
     data = np.array(data['MobileWeb'])
     data_time = pd.read_pickle('dataTimestamps.npy')
     data_time_dt = pd.to_datetime(data_time, unit='s')
-    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True, 'Ad engagement rate [MobileWeb]')
+    detect_cusum_offline(data, data_time_dt, 3, 50, 100000, 'mean', True, 'Ad engagement rate [MobileWeb]', save_name='changeDetectorMobileWebAbsolute.png' )
 
     print('Finished')
