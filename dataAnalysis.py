@@ -41,7 +41,7 @@ ax.set_xlabel('Log10(Count)')
 ax.set_ylabel('Object class')
 ax.set_title('Number of interactions per object')
 plt.subplots_adjust(left=.25)
-plt.savefig('interactions_objects.png', bbox_inches='tight')
+plt.savefig('interactions_objects.png', bbox_inches='tight', dpi=300)
 print(interaction_group)
 
 
@@ -65,7 +65,7 @@ ax.set_xlabel('Log10(Count)')
 ax.set_ylabel('SDK')
 ax.set_title('Number of interactions per SDK')
 plt.subplots_adjust(left=.25)
-plt.savefig('interactions_sdk.png', bbox_inches='tight')
+plt.savefig('interactions_sdk.png', bbox_inches='tight', dpi=300)
 print(interaction_group)
 
 

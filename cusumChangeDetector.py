@@ -127,7 +127,7 @@ def detect_cusum_offline(data, datat=None, threshold_factor=1, min_threshold_ste
     if show:
         plot_detections(data, datat, alarm_index, start_index, np.array(data_mean), 3 * np.array(data_std), ylabel)
         if save_name is not None:
-            plt.savefig(save_name, bbox_inches='tight')
+            plt.savefig(save_name, bbox_inches='tight', dpi=300)
         plt.show()
 
 
