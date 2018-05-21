@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import datetime as dt
 import pandas as pd
+import os
+
 
 class CusumChangeDetector:
     """
@@ -11,6 +13,12 @@ class CusumChangeDetector:
     """
 
     def __init__(self, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean'):
+        """
+        :param threshold_factor: number of standard deviations to use as thresgold
+        :param min_threshold_steps: number of steps the change needs to be effective
+        :param window_size: size of the window for computing online mean and standard deviation
+        :param mode: 'mean', other - compute difference of mean or difference of function values
+        """
         self.threshold_factor = threshold_factor
         self.min_threshold_steps = min_threshold_steps
         self.window_size = window_size
@@ -31,6 +39,12 @@ class CusumChangeDetector:
         self.mean_at_start = [0, 0]
 
     def compute_stream_mean_and_variance(self, added_value, removed_value):
+        """
+        Online algorithm for computing window mean and variance
+        :param added_value: new value added to the window
+        :param removed_value: the value at the beginning of the window that is removed
+        :return:
+        """
         if self.stream_mean is None:
             self.stream_mean = added_value
             self.variance_stream = 0
@@ -48,7 +62,13 @@ class CusumChangeDetector:
         return self.stream_mean, self.std
 
     def add_data_point(self, x, index):
-
+        """ Main algortihm - accumulates positive and negative differences, and detects changes
+            In the online detection algorithm inserts a new datapoint in the window
+        :param x: value of the datapoint
+        :param index:  index of the datapoint - timestamp or range: should increase for each datapoint
+        :return: if change detected tuple of the detected alarm index, alarm start index, relative change of the alarm
+                 else tuple of None values
+        """
         alarm_index = None
         start_index = None
         relative_change = None
@@ -66,6 +86,7 @@ class CusumChangeDetector:
             else:
                 diff = x - self.previous[0]
 
+            # accumulation of differences
             self.control_upper = self.control_upper + diff
             self.control_lower = self.control_lower - diff
 
@@ -78,6 +99,7 @@ class CusumChangeDetector:
                 self.control_lower_start = index
                 self.mean_at_start[1] = mean_val
 
+            # checks if the accumulated difference is above the threshold
             if self.control_upper > threshold or self.control_lower > threshold:
                 # change detected
                 self.threshold_surpassed_count += 1
@@ -106,7 +128,19 @@ class CusumChangeDetector:
 
 def detect_cusum_offline(data, datat=None, threshold_factor=1, min_threshold_steps=0, window_size=1, mode='mean',
                          show=True, ylabel=None, save_name=None):
-
+    """
+    Offline version of the cusum algorithm. For the input time series calls the online version for each point. Can also
+    plot the time series with the detected changes
+    :param data: input time series values
+    :param datat: input time series indices - range or pandas DatetimeIndex
+    :param threshold_factor: number of standard deviations to use as thresgold
+    :param min_threshold_steps: number of steps the change needs to be effective
+    :param window_size: size of the window for computing online mean and standard deviation
+    :param mode: 'mean', other - compute difference of mean or difference of function values
+    :param show: T/F display results in a graph
+    :param ylabel: string to change the default y axis label
+    :param save_name: name of the file where to save the figure
+    """
     change_detector = CusumChangeDetector(threshold_factor,  min_threshold_steps, window_size, mode)
     alarm_index, start_index = [], []
     data_mean, data_std = [], []
@@ -132,7 +166,16 @@ def detect_cusum_offline(data, datat=None, threshold_factor=1, min_threshold_ste
 
 
 def plot_detections(data, datat, alarm_index, start_index, xmean, xstd, ylabel=None):
-    """Plot results of the detect_cusum function"""
+    """
+    Plots the results of the offline version of the cusum detector
+    :param data: input time series values
+    :param datat: input time series indices - range or pandas DatetimeIndex
+    :param alarm_index: indeces of where changes occured
+    :param start_index: indeces of where changes originated
+    :param xmean: rolling mean values of the time series
+    :param xstd: rolling standard deviation of the time series
+    :param ylabel: string to change the default y axis label
+    """
 
     t = datat
     if t is None:
@@ -186,6 +229,11 @@ if __name__ == '__main__':
 
     from cusumChangeDetector import detect_cusum_offline
 
+    if not os.path.exists('adEngagementRate.npy'):
+        raise ValueError('Missing data files. First run streamEngagemant.py script to compute the offline ad engagement data.')
+
+    # offline detection of ad engagement rate changes
+    # read stored ad engagement rate
     data = pd.read_pickle('adEngagementRate.npy')
     # plot x-axis as %H:%M
     data_time = pd.read_pickle('dataTimestamps.npy')

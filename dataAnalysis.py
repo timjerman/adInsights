@@ -4,10 +4,18 @@ import matplotlib.pyplot as plt
 
 import dataLoader
 
+
+"""
+Analysis of the input json data that is not part of the assignment
+"""
+
 file_name = 'bdsEventsSample.json'
 
+# read json file into a pandas DataFrame
 file_reader = dataLoader.FileReader(file_name)
 df = file_reader.load_data(use_already_preprocessed=True, save_preprocessed=True)
+
+########################### Differences between server and client timestamps ##############################
 
 ad_request_timestamps = df.loc[df['name'] == 'adRequested'][['clientTimestamp', 'timestamp']]
 timestamp_diff = (ad_request_timestamps['clientTimestamp'] - ad_request_timestamps['timestamp'])

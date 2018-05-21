@@ -6,6 +6,9 @@ import datetime
 
 
 class FileReader:
+    """
+    Reads, writes, and preprocesses json line files
+    """
 
     PROCESSED_SUFFIX = '_preprocessed'
     SORTED_SUFFIX = '_sorted'
@@ -13,23 +16,36 @@ class FileReader:
     processed_file_name = ''
 
     def __init__(self, in_file_name, suffix=PROCESSED_SUFFIX):
+        """
+        :param in_file_name: location of the file to read
+        :param suffix: suffix to append to in_file_name while saving
+        """
         self.in_file_name = in_file_name
         split_path = os.path.splitext(in_file_name)
         self.processed_file_name = split_path[0] + suffix + split_path[1]
 
     def read_json_line_data(self, in_file_name):
-
+        """
+        Reads thw whole json file to a pandas dataframe
+        :param in_file_name: name of the file to read
+        :return: pandas DataFrame of the input json
+        """
         return pd.read_json(in_file_name, lines=True, convert_dates=False, convert_axes=False)
 
     def write_json_line_data(self, df: pd.DataFrame, out_file_name):
         """
-        :param out_file_name: file name of the file where to save the json
-        :param df: data frame to save
+        Writes pandas dataframe as json lines
+        :param out_file_name: name of the file where to save the json
+        :param df: pandas DataFrame to save as json
         """
         df.to_json(out_file_name, orient='records', lines=True)
 
     def preprocess_data(self, df: pd.DataFrame):
-
+        """
+        Preprocesses the DataFrame for current application
+        :param df: pandas DataFrame
+        :return: preprocessed pandas DataFrame
+        """
         df['clientTimestamp'] = df['clientTimestamp'].fillna(value=0)
         # retain only selected values for column 'name'
         df = df.loc[df['name'].isin(['adRequested', 'screenShown', 'interaction', 'firstInteraction', 'userError', 'pageRequested'])].copy()
@@ -61,9 +77,21 @@ class FileReader:
         return df
 
     def sort_by_timestamp(self, df: pd.DataFrame):
+        """
+        Sorts pandas DataFrame by timestamp columns (unix DateTimes)
+        :param df: pandas DataFrame
+        :return: sorted pandas DataFrame
+        """
         return df.sort_values(by=['timestamp'])
 
-    def load_and_preprocess_data(self, process_function, use_already_preprocessed=True, save_preprocessed=True):
+    def load_and_process_data(self, process_function, use_already_preprocessed=True, save_preprocessed=True):
+        """
+        Loads, processes and saves the input file. If already exist it can just load it.
+        :param process_function: function used to process
+        :param use_already_preprocessed: T/F if it loads an already preocessed file
+        :param save_preprocessed: T/F should the preprocessed dataframe be saved
+        :return: preprocessed dataframe
+        """
         if use_already_preprocessed and os.path.exists(self.processed_file_name):
             return self.read_json_line_data(self.processed_file_name)
 
@@ -76,7 +104,13 @@ class FileReader:
         return df
 
     def load_data(self, use_already_preprocessed=True, save_preprocessed=True):
-        df = self.load_and_preprocess_data(
+        """
+        Loads, preprocesses and saves the input file. If already exist it can just load it.
+        :param use_already_preprocessed: T/F if it loads an already prepreocessed file
+        :param save_preprocessed: T/F should the preprocessed dataframe be saved
+        :return: preprocessed dataframe
+        """
+        df = self.load_and_process_data(
             self.preprocess_data,
             use_already_preprocessed=use_already_preprocessed,
             save_preprocessed=save_preprocessed
@@ -84,14 +118,21 @@ class FileReader:
 
         return df
 
-    def sort_input_data(self, use_already_preprocessed=True, save_preprocessed=True):
-        df = self.load_and_preprocess_data(
+    def sort_input_data(self, use_already_sorted=True, save_sorted=True):
+        """
+        Loads, sorts and saves the input file. If already exist it can just load it.
+        :param use_already_sorted: T/F if it loads an already sorted file
+        :param save_sorted: T/F should the sorted dataframe be saved
+        :return: sorted dataframe
+        """
+        df = self.load_and_process_data(
             self.sort_by_timestamp,
-            use_already_preprocessed=use_already_preprocessed,
-            save_preprocessed=save_preprocessed
+            use_already_preprocessed=use_already_sorted,
+            save_preprocessed=save_sorted
         )
 
         return df
+
 
 if __name__ == '__main__':
 

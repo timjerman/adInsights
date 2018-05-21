@@ -4,12 +4,18 @@ from cusumChangeDetector import CusumChangeDetector
 from streamEngagement import StreamAdEngagement
 import dataLoader
 
-# load the data that will act as a stream and sort it by timestamp
+"""
+Reads a json file as a stream and reports changes to the console
+Changes to be considered should be defined in the for loop below
+"""
+
+# load the data that will act as a stream and sorts it by timestamp
 file_name = 'bdsEventsSample.json'
 file_reader = dataLoader.FileReader(file_name, suffix=dataLoader.FileReader.SORTED_SUFFIX)
-file_reader.sort_input_data(use_already_preprocessed=True, save_preprocessed=True)
+file_reader.sort_input_data(use_already_sorted=True, save_sorted=True)
 file_name = file_reader.processed_file_name
 
+# window size parameters: engagment and detector windows
 engagement_window_size = 10000
 detector_window_size = 100000
 
@@ -21,7 +27,9 @@ engagement_rate_object = {}
 engagement_rate_sdk_absolute = {}
 line_count = 0
 
+# initialize streaming object
 stream_ad_engagement = StreamAdEngagement(window_size=engagement_window_size)
+# initialize different detectors for selected time series
 change_detector = CusumChangeDetector(3, 50, detector_window_size, 'mean')
 change_detector_error = CusumChangeDetector(3, 50, detector_window_size, 'mean')
 change_detector_sdk = CusumChangeDetector(3, 50, detector_window_size, 'mean')
@@ -32,6 +40,7 @@ object_to_detect = 'Hotspot'
 with open(file_name) as stream:
     for stream_line_json in stream:
 
+        # analyze as single json line
         stream_engagement_return = stream_ad_engagement.analyze_line(stream_line_json)
 
         if stream_engagement_return is not None:
@@ -48,7 +57,7 @@ with open(file_name) as stream:
                 alarm, start_timestamp, relative_change = change_detector.add_data_point(stream_engagement_return[1], stream_engagement_return[0])
                 if alarm is not None:
                     print(
-                        'Ad Engagement: a change of {:.2f}% to {} detected at timestamp: {} with origin at timestamp: {}'.format(
+                        'Ad Engagement: a change of {:.2f}% to {:.2f} detected at timestamp: {} with origin at timestamp: {}'.format(
                             relative_change, stream_engagement_return[1], pd.to_datetime(alarm, unit='s'), pd.to_datetime(start_timestamp, unit='s')
                         )
                     )
@@ -56,7 +65,7 @@ with open(file_name) as stream:
                 alarm, start_timestamp, relative_change = change_detector_error.add_data_point(stream_engagement_return[2], stream_engagement_return[0])
                 if alarm is not None:
                     print(
-                        'Error rate: a change of {:.2f}% detected to {} at timestamp: {} with origin at timestamp: {}'.format(
+                        'Error rate: a change of {:.2f}% detected to {:.2f} at timestamp: {} with origin at timestamp: {}'.format(
                             relative_change, stream_engagement_return[2], pd.to_datetime(alarm, unit='s'), pd.to_datetime(start_timestamp, unit='s')
                         )
                     )
@@ -65,7 +74,7 @@ with open(file_name) as stream:
                     alarm, start_timestamp, relative_change = change_detector_sdk.add_data_point(stream_engagement_return[4][sdk_to_detect], stream_engagement_return[0])
                     if alarm is not None:
                         print(
-                            'SDK (MobileWeb) engagement: a change of {:.2f}% to {} detected at timestamp: {} with origin at timestamp: {}'.format(
+                            'SDK (MobileWeb) engagement: a change of {:.2f}% to {:.2f} detected at timestamp: {} with origin at timestamp: {}'.format(
                                 relative_change, stream_engagement_return[4][sdk_to_detect], pd.to_datetime(alarm, unit='s'), pd.to_datetime(start_timestamp, unit='s')
                             )
                         )
@@ -74,7 +83,7 @@ with open(file_name) as stream:
                     alarm, start_timestamp, relative_change = change_detector_sdk.add_data_point(stream_engagement_return[5][object_to_detect], stream_engagement_return[0])
                     if alarm is not None:
                         print(
-                            'SDK (MobileWeb) engagement: a change of {:.2f}% to {} detected at timestamp: {} with origin at timestamp: {}'.format(
+                            'SDK (MobileWeb) engagement: a change of {:.2f}% to {:.2f} detected at timestamp: {} with origin at timestamp: {}'.format(
                                 relative_change, stream_engagement_return[5][object_to_detect], pd.to_datetime(alarm, unit='s'), pd.to_datetime(start_timestamp, unit='s')
                             )
                         )
